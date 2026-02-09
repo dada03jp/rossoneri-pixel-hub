@@ -4,10 +4,13 @@ import { BackHeader } from '@/components/header';
 import { PlayerRatingCard } from '@/components/player-rating-card';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
+import { FormationDisplay } from '@/components/formation-display';
+import { EventTimeline } from '@/components/event-timeline';
 import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
-import { Match, Player } from '@/types/database';
+import { Match, Player, MatchEvent, MatchLineup } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
+import { getTeamColors } from '@/lib/team-colors';
 import { User } from '@supabase/supabase-js';
 import { useRealtimeRatings } from '@/hooks/use-realtime-ratings';
 
@@ -16,13 +19,17 @@ interface MatchDetailClientProps {
     players: (Player & { pixel_config: PixelConfig })[];
     ratings: Record<string, { average: number; count: number }>;
     isUsingMockData: boolean;
+    events: MatchEvent[];
+    lineups: MatchLineup[];
 }
 
 export function MatchDetailClient({
     match,
     players,
     ratings: initialRatings,
-    isUsingMockData
+    isUsingMockData,
+    events,
+    lineups
 }: MatchDetailClientProps) {
     // リアルタイム採点更新
     const { ratings, isConnected } = useRealtimeRatings({
@@ -72,7 +79,14 @@ export function MatchDetailClient({
         return () => subscription.unsubscribe();
     }, [match.id]);
 
-    // Group players by position
+    // Separate starters and substitutes
+    const { starters, substitutes } = useMemo(() => {
+        const starterList = players.filter((p: any) => p.is_starter === true);
+        const subList = players.filter((p: any) => p.is_starter === false);
+        return { starters: starterList, substitutes: subList };
+    }, [players]);
+
+    // Group players by position for starters only
     const playersByPosition = useMemo(() => {
         const groups: Record<string, typeof players> = {
             GK: [],
@@ -81,7 +95,7 @@ export function MatchDetailClient({
             FW: [],
         };
 
-        players.forEach(player => {
+        starters.forEach(player => {
             const pos = player.position || 'MF';
             if (groups[pos]) {
                 groups[pos].push(player);
@@ -89,7 +103,7 @@ export function MatchDetailClient({
         });
 
         return groups;
-    }, [players]);
+    }, [starters]);
 
     const handleSubmitRating = async (playerId: string, score: number, comment: string) => {
         if (!user) {
@@ -215,69 +229,145 @@ export function MatchDetailClient({
                     <TopRatedBanner players={players} ratings={ratings} />
                 )}
 
-                {/* Match Summary Card */}
-                <div className="bg-card border border-border rounded-xl p-6 md:p-8">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                        {/* Home Team */}
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 milan-stripes rounded-xl shadow-md" />
-                            <div>
-                                <p className="text-sm text-muted-foreground">HOME</p>
-                                <p className="text-2xl font-bold">AC Milan</p>
-                            </div>
+                {/* Match Summary Card - Home team always on left, Away on right */}
+                <div className="bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6 md:p-8 text-white">
+                    {/* Competition and Date Header */}
+                    <div className="text-center mb-4">
+                        <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
+                            <Trophy className="w-4 h-4" />
+                            <span>{match.competition}</span>
                         </div>
+                        <div className="text-sm text-slate-400 mt-1">
+                            {formatDate(match.match_date)}
+                        </div>
+                    </div>
 
-                        {/* Score */}
-                        <div className="flex flex-col items-center gap-2">
-                            {match.is_finished ? (
+                    {/* Teams and Score */}
+                    <div className="flex items-center justify-center gap-4 md:gap-8">
+                        {/* Home Team (Left Side) */}
+                        <div className="flex-1 flex flex-col items-center text-center">
+                            {match.is_home ? (
                                 <>
-                                    <div className="flex items-center gap-4 text-5xl font-bold">
-                                        <span className={match.home_score! > match.away_score! ? 'text-primary' : ''}>
-                                            {match.home_score}
-                                        </span>
-                                        <span className="text-muted-foreground text-3xl">-</span>
-                                        <span className={match.away_score! > match.home_score! ? 'text-primary' : ''}>
-                                            {match.away_score}
-                                        </span>
-                                    </div>
-                                    {getResultBadge()}
+                                    <div className="w-16 h-16 md:w-20 md:h-20 milan-stripes rounded-full shadow-lg mb-2" />
+                                    <p className="text-lg md:text-xl font-bold">AC Milan</p>
                                 </>
                             ) : (
-                                <div className="text-3xl font-bold text-muted-foreground">VS</div>
+                                <>
+                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden flex shadow-lg mb-2">
+                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).primary }} />
+                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).secondary }} />
+                                    </div>
+                                    <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
+                                </>
+                            )}
+                            {/* Home Goals */}
+                            {match.is_finished && events.filter(e => e.event_type === 'goal').length > 0 && (
+                                <div className="mt-2 text-xs text-slate-400 space-y-0.5">
+                                    {events
+                                        .filter(e => e.event_type === 'goal')
+                                        .filter(e => {
+                                            // Match is_home: true = Milan is home team
+                                            // Home side shows: Milan goals if is_home, opponent goals if !is_home
+                                            const isMilanGoal = String(e.details?.is_milan) === 'true';
+                                            return match.is_home ? isMilanGoal : !isMilanGoal;
+                                        })
+                                        .map((e, i) => (
+                                            <div key={i}>
+                                                {e.player_name.split(' ').pop()} {e.minute}&apos;
+                                                {String(e.details?.penalty) === 'true' && ' (PK)'}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
                             )}
                         </div>
 
-                        {/* Away Team */}
-                        <div className="flex items-center gap-4">
-                            <div className="text-right">
-                                <p className="text-sm text-muted-foreground">AWAY</p>
-                                <p className="text-2xl font-bold">{match.opponent_name}</p>
-                            </div>
-                            <div className="w-16 h-16 bg-muted rounded-xl flex items-center justify-center">
-                                <span className="text-xl font-bold text-muted-foreground">
-                                    {match.opponent_name.slice(0, 2).toUpperCase()}
-                                </span>
-                            </div>
+                        {/* Score */}
+                        <div className="flex flex-col items-center">
+                            {match.is_finished ? (
+                                <>
+                                    <div className="flex items-center gap-3 text-4xl md:text-5xl font-bold">
+                                        <span className={
+                                            (match.is_home && match.home_score! > match.away_score!) ||
+                                                (!match.is_home && match.away_score! > match.home_score!)
+                                                ? 'text-red-500' : 'text-white'
+                                        }>
+                                            {match.home_score}
+                                        </span>
+                                        <span className="text-slate-500 text-2xl">-</span>
+                                        <span className={
+                                            (!match.is_home && match.home_score! > match.away_score!) ||
+                                                (match.is_home && match.away_score! > match.home_score!)
+                                                ? 'text-red-500' : 'text-white'
+                                        }>
+                                            {match.away_score}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2">
+                                        {(() => {
+                                            const milanScore = match.is_home ? match.home_score! : match.away_score!;
+                                            const opponentScore = match.is_home ? match.away_score! : match.home_score!;
+                                            if (milanScore > opponentScore) {
+                                                return <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">勝利</span>;
+                                            } else if (milanScore === opponentScore) {
+                                                return <span className="bg-yellow-600 text-white px-3 py-1 rounded-full text-xs font-bold">引き分け</span>;
+                                            } else {
+                                                return <span className="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold">敗北</span>;
+                                            }
+                                        })()}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-3xl font-bold text-slate-400">VS</div>
+                            )}
+                        </div>
+
+                        {/* Away Team (Right Side) */}
+                        <div className="flex-1 flex flex-col items-center text-center">
+                            {!match.is_home ? (
+                                <>
+                                    <div className="w-16 h-16 md:w-20 md:h-20 milan-stripes rounded-full shadow-lg mb-2" />
+                                    <p className="text-lg md:text-xl font-bold">AC Milan</p>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden flex shadow-lg mb-2">
+                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).primary }} />
+                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).secondary }} />
+                                    </div>
+                                    <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
+                                </>
+                            )}
+                            {/* Away Goals - Right side shows away team goals */}
+                            {match.is_finished && events.filter(e => e.event_type === 'goal').length > 0 && (
+                                <div className="mt-2 text-xs text-slate-400 space-y-0.5">
+                                    {events
+                                        .filter(e => e.event_type === 'goal')
+                                        .filter(e => {
+                                            // Away side shows: Milan goals if !is_home, opponent goals if is_home
+                                            const isMilanGoal = String(e.details?.is_milan) === 'true';
+                                            return match.is_home ? !isMilanGoal : isMilanGoal;
+                                        })
+                                        .map((e, i) => (
+                                            <div key={i}>
+                                                {e.player_name.split(' ').pop()} {e.minute}&apos;
+                                                {String(e.details?.penalty) === 'true' && ' (PK)'}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Match Info */}
-                    <div className="flex flex-wrap items-center justify-center gap-6 mt-6 pt-6 border-t border-border">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Trophy className="w-4 h-4 text-primary" />
-                            <span>{match.competition}</span>
+                    {/* Team Average Rating */}
+                    {matchAverageRating && (
+                        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-700 text-sm">
+                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                            <span className="text-slate-400">チーム平均:</span>
+                            <strong className="text-yellow-500">{matchAverageRating.toFixed(1)}</strong>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="w-4 h-4 text-primary" />
-                            <span>{formatDate(match.match_date)}</span>
-                        </div>
-                        {matchAverageRating && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <Star className="w-4 h-4 text-primary fill-primary" />
-                                <span>チーム平均: <strong className="text-primary">{matchAverageRating.toFixed(1)}</strong></span>
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
 
                 {/* Player Ratings Section */}
@@ -315,39 +405,95 @@ export function MatchDetailClient({
                             </div>
                         )}
 
-                        {/* Lineup Visualization */}
-                        <div className="bg-gradient-to-b from-green-900/20 to-green-800/10 rounded-xl p-6 border border-green-800/20">
-                            <div className="flex flex-wrap justify-center gap-3">
-                                {players.map(player => {
-                                    const playerRating = ratings[player.id];
-                                    return (
-                                        <div
-                                            key={player.id}
-                                            className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                                            title={`${player.name} - ${playerRating?.average.toFixed(1) || 'N/A'}`}
-                                        >
-                                            {player.pixel_config && (
-                                                <PixelPlayer
-                                                    config={player.pixel_config}
-                                                    number={player.number}
-                                                    size={48}
-                                                />
-                                            )}
-                                            <span className="text-xs text-center font-medium max-w-[60px] truncate">
-                                                {player.name.split(' ').pop()}
-                                            </span>
-                                            {playerRating && (
-                                                <span className="text-xs font-bold text-primary">
-                                                    {playerRating.average.toFixed(1)}
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                        {/* Formation Display */}
+                        {lineups.length > 0 && match.formation && (
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    ⚽ スターティングラインナップ
+                                </h3>
+                                <FormationDisplay
+                                    lineup={lineups}
+                                    formation={match.formation}
+                                    isHome={match.is_home ?? true}
+                                />
                             </div>
-                        </div>
+                        )}
 
-                        {/* Rating Cards by Position */}
+                        {/* Player Lineup Cards - Starters */}
+                        {(lineups.length === 0 || !match.formation) && starters.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg">⚽ スターティングメンバー ({starters.length}人)</h3>
+                                <div className="bg-gradient-to-b from-green-900/20 to-green-800/10 rounded-xl p-6 border border-green-800/20">
+                                    <div className="flex flex-wrap justify-center gap-3">
+                                        {starters.map(player => {
+                                            const playerRating = ratings[player.id];
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                                                    title={`${player.name} - ${playerRating?.average.toFixed(1) || 'N/A'}`}
+                                                >
+                                                    {player.pixel_config && (
+                                                        <PixelPlayer
+                                                            config={player.pixel_config}
+                                                            number={player.number}
+                                                            size={48}
+                                                        />
+                                                    )}
+                                                    <span className="text-xs text-center font-medium max-w-[60px] truncate">
+                                                        {player.name.split(' ').pop()}
+                                                    </span>
+                                                    {playerRating && (
+                                                        <span className="text-xs font-bold text-primary">
+                                                            {playerRating.average.toFixed(1)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Player Lineup Cards - Substitutes */}
+                        {(lineups.length === 0 || !match.formation) && substitutes.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg">🔄 交代出場 ({substitutes.length}人)</h3>
+                                <div className="bg-gradient-to-b from-blue-900/20 to-blue-800/10 rounded-xl p-6 border border-blue-800/20">
+                                    <div className="flex flex-wrap justify-center gap-3">
+                                        {substitutes.map(player => {
+                                            const playerRating = ratings[player.id];
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                                                    title={`${player.name} - ${playerRating?.average.toFixed(1) || 'N/A'}`}
+                                                >
+                                                    {player.pixel_config && (
+                                                        <PixelPlayer
+                                                            config={player.pixel_config}
+                                                            number={player.number}
+                                                            size={48}
+                                                        />
+                                                    )}
+                                                    <span className="text-xs text-center font-medium max-w-[60px] truncate">
+                                                        {player.name.split(' ').pop()}
+                                                    </span>
+                                                    {playerRating && (
+                                                        <span className="text-xs font-bold text-primary">
+                                                            {playerRating.average.toFixed(1)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Rating Cards by Position (Starters) */}
                         {Object.entries(playersByPosition).map(([position, posPlayers]) => {
                             if (posPlayers.length === 0) return null;
 
@@ -389,6 +535,38 @@ export function MatchDetailClient({
                                 </div>
                             );
                         })}
+
+                        {/* Rating Cards for Substitutes */}
+                        {substitutes.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="text-lg font-semibold flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                    🔄 交代出場
+                                </h3>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {substitutes.map(player => {
+                                        const playerRating = ratings[player.id];
+                                        const userRating = userRatings[player.id];
+
+                                        return (
+                                            <PlayerRatingCard
+                                                key={player.id}
+                                                playerId={player.id}
+                                                playerName={player.name}
+                                                playerNumber={player.number}
+                                                position={player.position || 'MF'}
+                                                pixelConfig={player.pixel_config}
+                                                averageRating={playerRating?.average}
+                                                totalRatings={playerRating?.count}
+                                                userRating={userRating?.score}
+                                                userComment={userRating?.comment}
+                                                onSubmitRating={handleSubmitRating}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Ranking Card */}
                         {Object.keys(ratings).length > 0 && (

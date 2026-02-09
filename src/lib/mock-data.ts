@@ -91,6 +91,9 @@ export const MOCK_MATCHES: Match[] = [
         away_score: 1,
         is_finished: true,
         competition: 'Serie A',
+        season_id: 'mock-25-26',
+        is_home: true,
+        formation: '4-3-3',
     },
     {
         id: 'match-2',
@@ -100,6 +103,9 @@ export const MOCK_MATCHES: Match[] = [
         away_score: null,
         is_finished: false,
         competition: 'Serie A',
+        season_id: 'mock-25-26',
+        is_home: false,
+        formation: null,
     },
     {
         id: 'match-3',
@@ -109,6 +115,9 @@ export const MOCK_MATCHES: Match[] = [
         away_score: 0,
         is_finished: true,
         competition: 'Serie A',
+        season_id: 'mock-25-26',
+        is_home: true,
+        formation: '4-3-3',
     },
     {
         id: 'match-4',
@@ -118,6 +127,9 @@ export const MOCK_MATCHES: Match[] = [
         away_score: null,
         is_finished: false,
         competition: 'UCL',
+        season_id: 'mock-25-26',
+        is_home: false,
+        formation: null,
     },
     {
         id: 'match-5',
@@ -127,6 +139,9 @@ export const MOCK_MATCHES: Match[] = [
         away_score: 1,
         is_finished: true,
         competition: 'Serie A',
+        season_id: 'mock-24-25',
+        is_home: true,
+        formation: '4-3-3',
     },
 ];
 

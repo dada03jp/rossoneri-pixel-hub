@@ -8,6 +8,14 @@ export interface Profile {
     updated_at: string | null;
 }
 
+export interface Season {
+    id: string;
+    name: string;
+    start_year: number;
+    end_year: number;
+    is_current: boolean;
+}
+
 export interface Match {
     id: string;
     opponent_name: string;
@@ -16,6 +24,31 @@ export interface Match {
     away_score: number | null;
     is_finished: boolean;
     competition: string | null;
+    season_id: string | null;
+    is_home: boolean | null;
+    formation: string | null;
+}
+
+export interface MatchEvent {
+    id: string;
+    match_id: string;
+    event_type: 'goal' | 'assist' | 'yellow_card' | 'red_card' | 'substitution_in' | 'substitution_out';
+    player_id: string | null;
+    player_name: string;
+    minute: number;
+    details: Record<string, string>;
+}
+
+export interface MatchLineup {
+    id: string;
+    match_id: string;
+    player_id: string | null;
+    player_name: string;
+    jersey_number: number;
+    is_starter: boolean;
+    position_role: 'GK' | 'DF' | 'MF' | 'FW';
+    position_x: number;
+    position_y: number;
 }
 
 export interface Player {
@@ -28,6 +61,16 @@ export interface Player {
         hairStyle: 'short' | 'medium' | 'bald' | 'afro';
         hairColor: 'black' | 'brown' | 'blonde';
     } | null;
+}
+
+export interface PlayerSeason {
+    id: string;
+    player_id: string;
+    season_id: string;
+    jersey_number: number;
+    is_active: boolean;
+    joined_date: string | null;
+    left_date: string | null;
 }
 
 export interface MatchPlayer {

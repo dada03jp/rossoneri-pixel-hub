@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { AuthButton } from './auth-button';
+import { SeasonSelector } from './season-selector';
 
 export function Header() {
     return (
@@ -12,7 +13,7 @@ export function Header() {
 
                     <div className="flex flex-col">
                         <span className="text-lg font-bold tracking-tight">
-                            <span className="text-primary">ROSSONERI</span>
+                            <span className="text-primary">AC MILAN</span>
                             <span className="text-foreground"> PIXEL HUB</span>
                         </span>
                         <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
@@ -21,16 +22,18 @@ export function Header() {
                     </div>
                 </Link>
 
-                <nav className="flex items-center gap-6">
+                <nav className="flex items-center gap-4">
+                    <SeasonSelector />
+                    <div className="h-4 w-px bg-border hidden md:block" />
                     <Link
                         href="/"
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors hidden md:block"
                     >
                         試合一覧
                     </Link>
                     <Link
                         href="/players"
-                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+                        className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors hidden md:block"
                     >
                         選手
                     </Link>

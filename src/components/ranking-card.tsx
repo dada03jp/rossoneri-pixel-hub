@@ -113,6 +113,13 @@ export function RankingCard({ title, players, ratings, limit = 5 }: RankingCardP
 interface TopRatedBannerProps {
     players: (Player & { pixel_config: PixelConfig })[];
     ratings: Record<string, { average: number; count: number }>;
+    topComment?: {
+        userName: string;
+        comment: string;
+        score: number;
+    } | null;
+    onShowComments?: () => void;
+    totalComments?: number;
 }
 
 interface TopPlayerData {
@@ -121,7 +128,13 @@ interface TopPlayerData {
     count: number;
 }
 
-export function TopRatedBanner({ players, ratings }: TopRatedBannerProps) {
+export function TopRatedBanner({
+    players,
+    ratings,
+    topComment,
+    onShowComments,
+    totalComments = 0
+}: TopRatedBannerProps) {
     const topPlayer = useMemo((): TopPlayerData | null => {
         let best: TopPlayerData | null = null;
 
@@ -140,29 +153,57 @@ export function TopRatedBanner({ players, ratings }: TopRatedBannerProps) {
     }
 
     return (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4 flex items-center gap-4">
-            <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-yellow-600" />
-                <span className="text-sm font-medium text-yellow-800">今試合のMVP</span>
+        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4">
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-yellow-600" />
+                    <span className="text-sm font-medium text-yellow-800">今試合のMVP</span>
+                </div>
+
+                {topPlayer.player.pixel_config && (
+                    <PixelPlayer
+                        config={topPlayer.player.pixel_config}
+                        number={topPlayer.player.number}
+                        size={48}
+                    />
+                )}
+
+                <div className="flex-1">
+                    <p className="font-bold text-lg">{topPlayer.player.name}</p>
+                    <p className="text-sm text-muted-foreground">{topPlayer.count}件の評価</p>
+                </div>
+
+                <div className="text-right">
+                    <p className="text-3xl font-bold text-yellow-600">{topPlayer.average.toFixed(1)}</p>
+                    <p className="text-xs text-yellow-600">平均評価</p>
+                </div>
             </div>
 
-            {topPlayer.player.pixel_config && (
-                <PixelPlayer
-                    config={topPlayer.player.pixel_config}
-                    number={topPlayer.player.number}
-                    size={48}
-                />
+            {/* トップコメント表示 */}
+            {topComment && topComment.comment && (
+                <div className="mt-3 pt-3 border-t border-yellow-200/50">
+                    <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 text-xs text-yellow-700">
+                                <span className="font-medium">{topComment.userName || '匿名'}</span>
+                                <span>{topComment.score.toFixed(1)}点</span>
+                            </div>
+                            <p className="text-sm text-yellow-800 mt-0.5 line-clamp-2">
+                                "{topComment.comment}"
+                            </p>
+                        </div>
+                    </div>
+
+                    {onShowComments && totalComments > 1 && (
+                        <button
+                            onClick={onShowComments}
+                            className="mt-2 text-xs text-yellow-700 hover:text-yellow-900 hover:underline"
+                        >
+                            その他のコメントを見る ({totalComments - 1}件)
+                        </button>
+                    )}
+                </div>
             )}
-
-            <div className="flex-1">
-                <p className="font-bold text-lg">{topPlayer.player.name}</p>
-                <p className="text-sm text-muted-foreground">{topPlayer.count}件の評価</p>
-            </div>
-
-            <div className="text-right">
-                <p className="text-3xl font-bold text-yellow-600">{topPlayer.average.toFixed(1)}</p>
-                <p className="text-xs text-yellow-600">平均評価</p>
-            </div>
         </div>
     );
 }

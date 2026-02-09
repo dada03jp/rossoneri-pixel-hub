@@ -7,6 +7,7 @@ import {
 } from '@/lib/mock-data';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { MatchEvent, MatchLineup } from '@/types/database';
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -99,6 +100,46 @@ async function getRatings(matchId: string) {
     }
 }
 
+async function getMatchEvents(matchId: string): Promise<MatchEvent[] | null> {
+    try {
+        const supabase = await createClient();
+        const { data, error } = await supabase
+            .from('match_events')
+            .select('*')
+            .eq('match_id', matchId)
+            .order('minute', { ascending: true });
+
+        if (error) {
+            console.error('Supabase error fetching events:', error);
+            return null;
+        }
+        return data as MatchEvent[];
+    } catch (e) {
+        console.error('Failed to fetch events:', e);
+        return null;
+    }
+}
+
+async function getMatchLineups(matchId: string): Promise<MatchLineup[] | null> {
+    try {
+        const supabase = await createClient();
+        const { data, error } = await supabase
+            .from('match_lineups')
+            .select('*')
+            .eq('match_id', matchId)
+            .order('is_starter', { ascending: false });
+
+        if (error) {
+            console.error('Supabase error fetching lineups:', error);
+            return null;
+        }
+        return data as MatchLineup[];
+    } catch (e) {
+        console.error('Failed to fetch lineups:', e);
+        return null;
+    }
+}
+
 export default async function MatchDetailPage({ params }: PageProps) {
     const { id: matchId } = await params;
 
@@ -106,6 +147,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
     const supabaseMatch = await getMatch(matchId);
     const supabasePlayers = supabaseMatch ? await getMatchPlayers(matchId) : null;
     const supabaseRatings = supabaseMatch ? await getRatings(matchId) : null;
+    const events = supabaseMatch ? await getMatchEvents(matchId) : null;
+    const lineups = supabaseMatch ? await getMatchLineups(matchId) : null;
 
     // Use Supabase data or fall back to mock
     const match = supabaseMatch || getMatchById(matchId);
@@ -135,6 +178,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
             players={players}
             ratings={ratings}
             isUsingMockData={isUsingMockData}
+            events={events || []}
+            lineups={lineups || []}
         />
     );
 }

@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { MatchCard } from '@/components/match-card';
 import { PixelPlayer } from '@/components/pixel-player';
-import { Calendar, Users, Star, TrendingUp, AlertCircle } from 'lucide-react';
+import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react';
 import { MOCK_MATCHES, MOCK_PLAYERS } from '@/lib/mock-data';
+import Link from 'next/link';
 
 async function getMatches() {
   try {
@@ -10,7 +11,7 @@ async function getMatches() {
     const { data, error } = await supabase
       .from('matches')
       .select('*')
-      .order('match_date', { ascending: false });
+      .order('match_date', { ascending: true });
 
     if (error) {
       console.error('Supabase error:', error);
@@ -51,14 +52,19 @@ export default async function Home() {
   const players = supabasePlayers || MOCK_PLAYERS;
   const isUsingMockData = !supabaseMatches;
 
-  // Sort matches by date (newest first)
-  const sortedMatches = [...matches].sort(
-    (a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime()
-  );
+  // 今後の試合: 昇順（近い順）
+  const upcomingMatches = [...matches]
+    .filter(m => !m.is_finished)
+    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
 
-  // Separate finished and upcoming matches
-  const finishedMatches = sortedMatches.filter(m => m.is_finished);
-  const upcomingMatches = sortedMatches.filter(m => !m.is_finished);
+  // 試合結果: 降順（最新順）
+  const finishedMatches = [...matches]
+    .filter(m => m.is_finished)
+    .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime());
+
+  // ホームページ表示用：次の4試合、最新の4結果
+  const nextMatches = upcomingMatches.slice(0, 4);
+  const recentResults = finishedMatches.slice(0, 4);
 
   // Get first 5 players for hero display
   const displayPlayers = players.slice(0, 5);
@@ -81,7 +87,8 @@ export default async function Home() {
       )}
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/10 via-background to-background border border-border p-8 md:p-12">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-card to-muted/50 border border-border p-8">
+        {/* Background decoration */}
         <div className="absolute top-0 right-0 w-64 h-64 opacity-10">
           <div className="w-full h-full milan-stripes rounded-full blur-3xl" />
         </div>
@@ -89,7 +96,7 @@ export default async function Home() {
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
           <div className="flex-1 space-y-4">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-              <span className="text-primary">ROSSONERI</span>
+              <span className="text-primary">AC MILAN</span>
               <br />
               <span>PIXEL HUB</span>
             </h1>
@@ -113,8 +120,8 @@ export default async function Home() {
             </div>
           </div>
 
-          {/* Pixel Player Showcase */}
-          <div className="flex items-end gap-1">
+          {/* Player showcase */}
+          <div className="flex items-end gap-2">
             {displayPlayers.map((player, index) => (
               <div
                 key={player.id}
@@ -136,39 +143,26 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Upcoming Matches */}
-      {upcomingMatches.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <h2 className="text-2xl font-bold">今後の試合</h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {upcomingMatches.map(match => (
-              <MatchCard
-                key={match.id}
-                id={match.id}
-                opponentName={match.opponent_name}
-                matchDate={match.match_date}
-                homeScore={match.home_score}
-                awayScore={match.away_score}
-                isFinished={match.is_finished}
-                competition={match.competition || 'League'}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Recent Results */}
+      {/* Recent Results - Last 4 (上に移動) */}
       <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-primary" />
-          <h2 className="text-2xl font-bold">試合結果</h2>
-          <span className="text-sm text-muted-foreground">- 選手採点受付中</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            <h2 className="text-2xl font-bold">試合結果</h2>
+            <span className="text-sm text-muted-foreground">- 選手採点受付中</span>
+          </div>
+          {finishedMatches.length > 4 && (
+            <Link
+              href="/matches?filter=finished"
+              className="flex items-center gap-1 text-sm text-primary hover:underline"
+            >
+              過去の試合一覧
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          )}
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {finishedMatches.map(match => (
+          {recentResults.map(match => (
             <MatchCard
               key={match.id}
               id={match.id}
@@ -178,16 +172,53 @@ export default async function Home() {
               awayScore={match.away_score}
               isFinished={match.is_finished}
               competition={match.competition || 'League'}
+              isHome={match.is_home ?? true}
             />
           ))}
         </div>
       </section>
 
+      {/* Upcoming Matches - Next 4 (下に移動) */}
+      {nextMatches.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              <h2 className="text-2xl font-bold">今後の試合</h2>
+            </div>
+            {upcomingMatches.length > 4 && (
+              <Link
+                href="/matches?filter=upcoming"
+                className="flex items-center gap-1 text-sm text-primary hover:underline"
+              >
+                すべて見る
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {nextMatches.map(match => (
+              <MatchCard
+                key={match.id}
+                id={match.id}
+                opponentName={match.opponent_name}
+                matchDate={match.match_date}
+                homeScore={match.home_score}
+                awayScore={match.away_score}
+                isFinished={match.is_finished}
+                competition={match.competition || 'League'}
+                isHome={match.is_home ?? true}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Quick Stats */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: '最高評価選手', value: 'Rafael Leão', subtext: '平均 9.0' },
-          { label: '直近の勝利', value: 'vs Juventus', subtext: '2-1' },
+          { label: '直近の勝利', value: 'vs Bologna', subtext: '3-0' },
           { label: '今季得点', value: '52', subtext: 'ゴール' },
           { label: 'コミュニティ', value: '1,234', subtext: '人が参加' },
         ].map((stat, index) => (
