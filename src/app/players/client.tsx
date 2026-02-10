@@ -1,5 +1,6 @@
 'use client';
 
+import { PlayerCard } from '@/components/players/PlayerCard';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { useSeason } from '@/contexts/season-context';
 import { Player, Season } from '@/types/database';
@@ -36,7 +37,7 @@ export function PlayersPageClient({ players, seasons, isUsingMockData }: Players
 
     // Filter players by selected season
     const filteredPlayers = useMemo(() => {
-        if (!selectedSeason) return players;
+        if (!selectedSeason) return players.map(p => ({ ...p, is_active: true }));
 
         return players.filter(player => {
             const seasonData = player.player_seasons?.find(
@@ -125,7 +126,16 @@ export function PlayersPageClient({ players, seasons, isUsingMockData }: Players
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                             {positionPlayers.map(player => (
-                                <PlayerCard key={player.id} player={player} />
+                                <PlayerCard
+                                    key={player.id}
+                                    name={player.name}
+                                    number={player.number}
+                                    position={player.position || ''}
+                                    pixelConfig={player.pixel_config}
+                                    averageRating={null}
+                                    recentRatings={[]}
+                                    className={`${player.is_active === false ? 'opacity-60 grayscale' : ''}`}
+                                />
                             ))}
                         </div>
                     </div>
@@ -142,29 +152,4 @@ export function PlayersPageClient({ players, seasons, isUsingMockData }: Players
     );
 }
 
-function PlayerCard({ player }: { player: PlayerWithSeasons & { is_active?: boolean } }) {
-    return (
-        <div className={`bg-card border border-border rounded-xl p-4 hover:border-primary/50 transition-all ${player.is_active === false ? 'opacity-60' : ''
-            }`}>
-            <div className="flex items-center gap-3">
-                <PixelPlayer
-                    config={player.pixel_config}
-                    number={player.number}
-                    size={56}
-                />
-                <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{player.name}</p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="bg-muted px-1.5 py-0.5 rounded text-xs font-medium">
-                            {player.position}
-                        </span>
-                        <span>#{player.number}</span>
-                    </div>
-                    {player.is_active === false && (
-                        <span className="text-xs text-red-500 mt-1 block">退団</span>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
+
