@@ -32,7 +32,7 @@ export function MatchDetailClient({
     lineups
 }: MatchDetailClientProps) {
     // リアルタイム採点更新
-    const { ratings, isConnected } = useRealtimeRatings({
+    const { ratings, comments, isConnected } = useRealtimeRatings({
         matchId: match.id,
         initialRatings
     });
@@ -405,6 +405,67 @@ export function MatchDetailClient({
                             </div>
                         )}
 
+
+                        {/* MVP Banner */}
+                        {Object.keys(ratings).length > 0 && (
+                            <div className="mb-6">
+                                <TopRatedBanner
+                                    players={players}
+                                    ratings={ratings}
+                                    topComment={(() => {
+                                        // MVP選手を特定
+                                        let bestPlayer: Player | null = null;
+                                        let bestRating = -1;
+
+                                        players.forEach(p => {
+                                            const r = ratings[p.id];
+                                            if (r && r.average > bestRating) {
+                                                bestRating = r.average;
+                                                bestPlayer = p;
+                                            }
+                                        });
+
+                                        if (!bestPlayer) return null;
+
+                                        // MVPのコメントを取得
+                                        // useRealtimeRatingsで取得したcommentsデータを使用
+                                        const playerComments = comments[bestPlayer.id] || [];
+                                        if (playerComments.length === 0) return null;
+
+                                        // いいね順 -> 新着順でソート
+                                        // 現在はlikesCountが未実装(0)なので実質新着順になるが、ロジックとしては正しい
+                                        const sorted = [...playerComments].sort((a, b) => {
+                                            if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
+                                            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                                        });
+
+                                        const top = sorted[0];
+                                        return {
+                                            userName: top.userName, // 匿名/ミラニスタ
+                                            comment: top.comment,
+                                            score: top.score
+                                        };
+                                    })()}
+                                    onShowComments={() => {
+                                        // 当該選手のカードまでスクロールするなどの処理があれば尚良し
+                                        // 今は単純に表示のみ
+                                    }}
+                                    totalComments={(() => {
+                                        let bestPlayerId = '';
+                                        let bestRating = -1;
+                                        players.forEach(p => {
+                                            const r = ratings[p.id];
+                                            if (r && r.average > bestRating) {
+                                                bestRating = r.average;
+                                                bestPlayerId = p.id;
+                                            }
+                                        });
+                                        return bestPlayerId ? (comments[bestPlayerId]?.length || 0) : 0;
+                                    })()}
+                                />
+                            </div>
+                        )}
+
                         {/* Formation Display */}
                         {lineups.length > 0 && match.formation && (
                             <div className="space-y-3">
@@ -528,6 +589,9 @@ export function MatchDetailClient({
                                                     userRating={userRating?.score}
                                                     userComment={userRating?.comment}
                                                     onSubmitRating={handleSubmitRating}
+                                                    disabled={loading}
+                                                    comments={comments[player.id] || []}
+                                                    onLikeComment={() => { }} // TODO: いいね機能
                                                 />
                                             );
                                         })}
@@ -561,6 +625,9 @@ export function MatchDetailClient({
                                                 userRating={userRating?.score}
                                                 userComment={userRating?.comment}
                                                 onSubmitRating={handleSubmitRating}
+                                                disabled={loading}
+                                                comments={comments[player.id] || []}
+                                                onLikeComment={() => { }} // TODO: いいね機能
                                             />
                                         );
                                     })}
