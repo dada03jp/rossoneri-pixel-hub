@@ -202,6 +202,7 @@ export default async function Home() {
             ratings={latestRatings}
             topComment={topComment}
             totalComments={totalComments}
+            matchId={latestFinishedMatch.id}
           />
         </section>
       )}

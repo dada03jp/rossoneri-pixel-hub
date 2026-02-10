@@ -4,6 +4,7 @@ import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { Trophy, TrendingUp, Medal } from 'lucide-react';
 import { useMemo } from 'react';
 import { Player } from '@/types/database';
+import Link from 'next/link';
 
 interface PlayerRanking {
     player: Player & { pixel_config: PixelConfig };
@@ -120,6 +121,7 @@ interface TopRatedBannerProps {
     } | null;
     onShowComments?: () => void;
     totalComments?: number;
+    matchId?: string;
 }
 
 interface TopPlayerData {
@@ -133,7 +135,8 @@ export function TopRatedBanner({
     ratings,
     topComment,
     onShowComments,
-    totalComments = 0
+    totalComments = 0,
+    matchId
 }: TopRatedBannerProps) {
     const topPlayer = useMemo((): TopPlayerData | null => {
         let best: TopPlayerData | null = null;
@@ -194,13 +197,24 @@ export function TopRatedBanner({
                         </div>
                     </div>
 
-                    {onShowComments && totalComments > 1 && (
-                        <button
-                            onClick={onShowComments}
-                            className="mt-2 text-xs text-yellow-700 hover:text-yellow-900 hover:underline"
-                        >
-                            その他のコメントを見る ({totalComments - 1}件)
-                        </button>
+                    {totalComments > 1 && (
+                        <div className="mt-2 text-right">
+                            {matchId ? (
+                                <Link
+                                    href={`/matches/${matchId}`}
+                                    className="text-xs text-yellow-700 hover:text-yellow-900 hover:underline"
+                                >
+                                    その他のコメントを見る ({totalComments - 1}件)
+                                </Link>
+                            ) : (
+                                <button
+                                    onClick={onShowComments}
+                                    className="text-xs text-yellow-700 hover:text-yellow-900 hover:underline"
+                                >
+                                    その他のコメントを見る ({totalComments - 1}件)
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
