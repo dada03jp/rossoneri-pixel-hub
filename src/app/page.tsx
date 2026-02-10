@@ -1,50 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { MatchCard } from '@/components/match-card';
 import { PixelPlayer } from '@/components/pixel-player';
-import { TopRatedBanner } from '@/components/ranking-card';
 import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react';
 import { MOCK_MATCHES, MOCK_PLAYERS } from '@/lib/mock-data';
 import Link from 'next/link';
-
-// Helper to get ratings for a specific match
-async function getMatchData(matchId: string) {
-  const supabase = await createClient();
-  const { data: ratingsData } = await supabase
-    .from('ratings')
-    .select('*, profiles(username)') // profiles(username) might fail if relation not set, use user_id if needed
-    .eq('match_id', matchId);
-
-  if (!ratingsData) return { ratings: {}, topComment: null };
-
-  const ratings: Record<string, { average: number; count: number }> = {};
-  const comments: any[] = [];
-
-  ratingsData.forEach((r: any) => {
-    // Calculate average
-    if (!ratings[r.player_id]) {
-      ratings[r.player_id] = { average: 0, count: 0, total: 0 } as any;
-    }
-    const current = ratings[r.player_id] as any;
-    current.total += r.score;
-    current.count += 1;
-    current.average = current.total / current.count;
-
-    // Collect comments
-    if (r.comment) {
-      comments.push({
-        userName: r.profiles?.username || 'Milanista',
-        comment: r.comment,
-        score: r.score,
-        createdAt: r.created_at
-      });
-    }
-  });
-
-  // Sort comments by date (newest first)
-  comments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  return { ratings, topComment: comments[0] || null, totalComments: comments.length };
-}
 
 async function getMatches() {
   try {
@@ -106,12 +65,6 @@ export default async function Home() {
   // ホームページ表示用：次の4試合、最新の4結果
   const nextMatches = upcomingMatches.slice(0, 4);
   const recentResults = finishedMatches.slice(0, 4);
-
-  // Get MVP data for the latest finished match
-  const latestFinishedMatch = finishedMatches[0];
-  const { ratings: latestRatings, topComment, totalComments } = latestFinishedMatch
-    ? await getMatchData(latestFinishedMatch.id)
-    : { ratings: {}, topComment: null, totalComments: 0 };
 
   // Get first 5 players for hero display
   const displayPlayers = players.slice(0, 5);
@@ -189,22 +142,6 @@ export default async function Home() {
           </div>
         </div>
       </section>
-
-      {/* Latest MVP Section */}
-      {latestFinishedMatch && Object.keys(latestRatings).length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Star className="w-5 h-5 text-yellow-500" />
-            <h2 className="text-2xl font-bold">前節のMVP & ハイライト</h2>
-          </div>
-          <TopRatedBanner
-            players={players}
-            ratings={latestRatings}
-            topComment={topComment}
-            totalComments={totalComments}
-          />
-        </section>
-      )}
 
       {/* Recent Results - Last 4 (上に移動) */}
       <section className="space-y-4">
