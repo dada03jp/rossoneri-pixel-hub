@@ -28,10 +28,10 @@ export function Header() {
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between relative">
                     {/* Logo Section */}
                     <Link href="/" className="flex items-center gap-2 group relative z-20" onClick={() => setIsOpen(false)}>
-                        <span className="font-pixel text-sm md:text-base tracking-tight text-black flex items-center">
+                        <span className="font-pixel text-sm md:text-base tracking-tighter text-black flex items-center">
                             AC MILAN
                             {/* Pixel Accent: Red & Pixel Font */}
-                            <span className="text-milan-red mx-2">PIXEL</span>
+                            <span className="text-milan-red mx-1">PIXEL</span>
                             HUB
                         </span>
                     </Link>

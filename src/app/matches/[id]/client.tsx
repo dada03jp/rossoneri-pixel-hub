@@ -429,7 +429,8 @@ export function MatchDetailClient({
 
                                         // MVPのコメントを取得
                                         // useRealtimeRatingsで取得したcommentsデータを使用
-                                        const playerComments = comments[bestPlayer.id] || [];
+                                        const bp = bestPlayer as Player;
+                                        const playerComments = comments[bp.id] || [];
                                         if (playerComments.length === 0) return null;
 
                                         // いいね順 -> 新着順でソート
