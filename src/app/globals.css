@@ -45,9 +45,10 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  
+
   /* Milan Design System Colors */
-  --color-milan-red: #E30613;
+  --color-milan-red: #FB090B;
+  --font-pixel: var(--font-pixel);
   --color-milan-black: #000000;
   --color-milan-white: #FFFFFF;
   --color-milan-text: #1A1A1A;
@@ -55,14 +56,16 @@
 }
 
 :root {
-  --radius: 0.25rem; /* レトロモダンな4px角丸 */
+  --radius: 0.25rem;
+  /* レトロモダンな4px角丸 */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.55 0.25 25); /* Milan Red */
+  --primary: oklch(0.55 0.25 25);
+  /* Milan Red */
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.145 0 0);
@@ -127,6 +130,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -140,25 +144,35 @@
 
 /* Milan Stripes Animation */
 @keyframes milan-stripe {
-  0% { background-position: 0 0; }
-  100% { background-position: 40px 0; }
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 40px 0;
+  }
 }
 
 .milan-stripes {
-  background: repeating-linear-gradient(
-    90deg,
-    #E30613 0px,
-    #E30613 10px,
-    #000000 10px,
-    #000000 20px
-  );
+  background: repeating-linear-gradient(90deg,
+      #E30613 0px,
+      #E30613 10px,
+      #000000 10px,
+      #000000 20px);
   background-size: 40px 100%;
 }
 
 /* Score highlight animation */
 @keyframes score-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .score-highlight {
