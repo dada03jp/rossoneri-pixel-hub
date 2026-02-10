@@ -78,7 +78,7 @@ export function MatchCard({
                         {isHome ? (
                             <>
                                 {/* Milan is Home */}
-                                <div className="w-10 h-10 rounded overflow-hidden flex">
+                                <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
                                     <div className="w-1/2 h-full bg-[#AB0920]" />
                                     <div className="w-1/2 h-full bg-black" />
                                 </div>
@@ -89,7 +89,7 @@ export function MatchCard({
                         ) : (
                             <>
                                 {/* Opponent is Home - 2 color stripes */}
-                                <div className="w-10 h-10 rounded overflow-hidden flex">
+                                <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.primary }} />
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.secondary }} />
                                 </div>
@@ -137,7 +137,7 @@ export function MatchCard({
                                 <div className="text-right">
                                     <p className="font-semibold text-lg">{opponentName}</p>
                                 </div>
-                                <div className="w-10 h-10 rounded overflow-hidden flex">
+                                <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.primary }} />
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.secondary }} />
                                 </div>
