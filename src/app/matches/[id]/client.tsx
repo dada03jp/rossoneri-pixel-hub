@@ -120,7 +120,8 @@ export function MatchDetailClient({
                 match_id: match.id,
                 player_id: playerId,
                 score,
-                comment: comment || null
+                comment: comment || null,
+                user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'ミラニスタ'
             } as any, {
                 onConflict: 'user_id,match_id,player_id'
             });

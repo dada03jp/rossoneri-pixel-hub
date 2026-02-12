@@ -276,17 +276,25 @@ export function PlayerCard({
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                className="space-y-2 mt-2"
+                                className="mt-2"
                             >
-                                {comments.map((c) => (
-                                    <div key={c.id} className="bg-gray-50 p-2 rounded text-xs">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="font-bold text-gray-700">{c.userName}</span>
-                                            <span className="font-bold text-[#E6B00F]">{c.score.toFixed(1)}</span>
+                                <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+                                    {comments.map((c) => (
+                                        <div key={c.id} className="bg-gray-50 p-2.5 rounded-md text-xs border border-gray-100">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-gray-700">{c.userName || 'ミラニスタ'}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <Star className="w-3 h-3 text-[#E6B00F] fill-[#E6B00F]" />
+                                                    <span className="font-bold text-[#E6B00F] font-mono">{c.score.toFixed(1)}</span>
+                                                </div>
+                                            </div>
+                                            <p className="text-gray-600 leading-relaxed break-words">{c.comment}</p>
+                                            <div className="mt-1 text-[10px] text-gray-400 text-right">
+                                                {new Date(c.createdAt).toLocaleDateString()}
+                                            </div>
                                         </div>
-                                        <p className="text-gray-600">{c.comment}</p>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </motion.div>
                         )}
                     </div>

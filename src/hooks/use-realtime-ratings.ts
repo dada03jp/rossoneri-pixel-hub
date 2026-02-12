@@ -91,6 +91,7 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
                 id,
                 player_id,
                 user_id,
+                user_name,
                 score,
                 comment,
                 created_at
@@ -104,9 +105,6 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             // N+1問題を避けるため、comment_likesテーブルから集計を取得するのが理想
 
             // クライアントサイドで加工
-            // ユーザー情報は別途取得しないと表示できない...
-            // 一旦「匿名ファン」として表示し、今後の課題とする
-
             const processed: Record<string, ProcessedComment[]> = {};
 
             commentsData.forEach((c: any) => {
@@ -117,7 +115,7 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
                     playerId: c.player_id,
                     playerName: '', // コンポーネント側で保管
                     userId: c.user_id,
-                    userName: 'ミラニスタ', // 仮
+                    userName: c.user_name || 'ミラニスタ', // DBのuser_nameを使用、なければデフォルト
                     score: c.score,
                     comment: c.comment,
                     createdAt: c.created_at,
