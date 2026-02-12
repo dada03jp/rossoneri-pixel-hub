@@ -1,7 +1,7 @@
 'use client';
 
 import { BackHeader } from '@/components/header';
-import { PlayerRatingCard } from '@/components/player-rating-card';
+import { PlayerCard } from '@/components/players/PlayerCard';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
 import { FormationDisplay } from '@/components/formation-display';
@@ -578,21 +578,24 @@ export function MatchDetailClient({
                                             const userRating = userRatings[player.id];
 
                                             return (
-                                                <PlayerRatingCard
+                                                <PlayerCard
                                                     key={player.id}
-                                                    playerId={player.id}
-                                                    playerName={player.name}
-                                                    playerNumber={player.number}
+                                                    name={player.name}
+                                                    number={player.number}
                                                     position={player.position || 'MF'}
                                                     pixelConfig={player.pixel_config}
-                                                    averageRating={playerRating?.average}
-                                                    totalRatings={playerRating?.count}
-                                                    userRating={userRating?.score}
-                                                    userComment={userRating?.comment}
-                                                    onSubmitRating={handleSubmitRating}
-                                                    disabled={loading}
+                                                    averageRating={playerRating?.average || null}
+                                                    totalRatings={playerRating?.count || 0}
+                                                    recentRatings={[]}
+                                                    initialRating={userRating?.score ?? 6.0}
+                                                    initialComment={userRating?.comment}
+                                                    isInteractive={true}
+                                                    isLoading={loading}
+                                                    isGuest={!user}
+                                                    onAuthAction={handleSignIn}
+                                                    onSubmit={(score, comment) => handleSubmitRating(player.id, score, comment)}
+                                                    className="w-full"
                                                     comments={comments[player.id] || []}
-                                                    onLikeComment={() => { }} // TODO: いいね機能
                                                 />
                                             );
                                         })}
@@ -614,21 +617,24 @@ export function MatchDetailClient({
                                         const userRating = userRatings[player.id];
 
                                         return (
-                                            <PlayerRatingCard
+                                            <PlayerCard
                                                 key={player.id}
-                                                playerId={player.id}
-                                                playerName={player.name}
-                                                playerNumber={player.number}
+                                                name={player.name}
+                                                number={player.number}
                                                 position={player.position || 'MF'}
                                                 pixelConfig={player.pixel_config}
-                                                averageRating={playerRating?.average}
-                                                totalRatings={playerRating?.count}
-                                                userRating={userRating?.score}
-                                                userComment={userRating?.comment}
-                                                onSubmitRating={handleSubmitRating}
-                                                disabled={loading}
+                                                averageRating={playerRating?.average || null}
+                                                totalRatings={playerRating?.count || 0}
+                                                recentRatings={[]}
+                                                initialRating={userRating?.score ?? 6.0}
+                                                initialComment={userRating?.comment}
+                                                isInteractive={true}
+                                                isLoading={loading}
+                                                isGuest={!user}
+                                                onAuthAction={handleSignIn}
+                                                onSubmit={(score, comment) => handleSubmitRating(player.id, score, comment)}
+                                                className="w-full"
                                                 comments={comments[player.id] || []}
-                                                onLikeComment={() => { }} // TODO: いいね機能
                                             />
                                         );
                                     })}

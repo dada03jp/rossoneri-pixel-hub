@@ -135,6 +135,11 @@ export function PlayersPageClient({ players, seasons, isUsingMockData }: Players
                                     averageRating={null}
                                     recentRatings={[]}
                                     className={`${player.is_active === false ? 'opacity-60 grayscale' : ''}`}
+                                    isInteractive={true}
+                                    onSubmit={async (rating, comment) => {
+                                        console.log(`Submitted for ${player.name}:`, rating, comment);
+                                        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+                                    }}
                                 />
                             ))}
                         </div>
