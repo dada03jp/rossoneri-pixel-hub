@@ -11,11 +11,12 @@ export default async function AdminPage() {
         .select('*')
         .order('match_date', { ascending: false });
 
-    // 選手取得(重複排除: name で DISTINCT)
+    // アクティブ選手のみ取得（背番号順、重複排除）
     const { data: allPlayers } = await supabase
         .from('players')
         .select('*')
-        .order('position, number');
+        .eq('is_active', true)
+        .order('number', { ascending: true });
 
     // 全イベント取得
     const { data: allEvents } = await supabase
@@ -31,10 +32,14 @@ export default async function AdminPage() {
         eventsByMatch[mid].push(event as MatchEvent);
     });
 
-    // 選手の重複排除 (name で一意)
-    const uniquePlayers = (allPlayers || []).filter(
-        (p: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.name === p.name) === i
-    );
+    // 選手の重複排除 (name で一意、背番号の若い方を残す)
+    const seen = new Set<string>();
+    const uniquePlayers = (allPlayers || []).filter((p: any) => {
+        const key = p.name?.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 
     return (
         <AdminClient

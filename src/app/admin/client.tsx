@@ -330,9 +330,17 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
-    // 重複排除: name で一意にする
-    const uniquePlayers = players.filter((p, i, arr) => arr.findIndex(x => x.name === p.name) === i);
-    const activePlayers = uniquePlayers.filter(p => p.is_active);
+    // 重複排除: name（小文字化）で一意にし、背番号順ソート
+    const seen = new Set<string>();
+    const uniquePlayers = players.filter(p => {
+        const key = p.name?.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    const activePlayers = uniquePlayers
+        .filter(p => p.is_active)
+        .sort((a, b) => (a.number || 0) - (b.number || 0));
     const inactivePlayers = uniquePlayers.filter(p => !p.is_active);
 
     const EVENT_TYPE_LABELS: Record<string, string> = {
