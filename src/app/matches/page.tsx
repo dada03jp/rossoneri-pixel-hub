@@ -4,6 +4,8 @@ import { Calendar, TrendingUp, Filter } from 'lucide-react';
 import { MOCK_MATCHES } from '@/lib/mock-data';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 interface MatchesPageProps {
     searchParams: Promise<{ filter?: string }>;
 }

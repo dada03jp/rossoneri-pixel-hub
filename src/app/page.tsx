@@ -5,6 +5,8 @@ import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight } from 'lu
 import { MOCK_MATCHES, MOCK_PLAYERS } from '@/lib/mock-data';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 async function getMatches() {
   try {
     const supabase = await createClient();

@@ -1,13 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Menu, X, ArrowLeft } from 'lucide-react';
+import { Menu, X, ArrowLeft, Settings } from 'lucide-react';
 import { AuthButton } from './auth-button';
 import { SeasonSelector } from './season-selector';
+import { createClient } from '@/lib/supabase/client';
+
+const ADMIN_EMAIL = 'marketing.workself@gmail.com';
 
 export function Header() {
     const [isOpen, setIsOpen] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setIsAdmin(user?.email === ADMIN_EMAIL);
+        });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setIsAdmin(session?.user?.email === ADMIN_EMAIL);
+        });
+        return () => subscription.unsubscribe();
+    }, []);
 
     const navItems = [
         { name: 'Match Ratings', path: '/' },
@@ -51,8 +66,17 @@ export function Header() {
                         ))}
                     </nav>
 
-                    {/* Actions (Season & Auth) */}
+                    {/* Actions (Season & Auth & Admin) */}
                     <div className="hidden md:flex items-center gap-4">
+                        {isAdmin && (
+                            <Link
+                                href="/admin"
+                                className="flex items-center gap-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-md transition-colors"
+                            >
+                                <Settings className="w-3.5 h-3.5" />
+                                管理画面
+                            </Link>
+                        )}
                         <SeasonSelector />
                         <div className="h-4 w-px bg-gray-200" />
                         <AuthButton />
@@ -86,6 +110,18 @@ export function Header() {
                                 {item.name}
                             </Link>
                         ))}
+
+                        {/* 管理者リンク（モバイル） */}
+                        {isAdmin && (
+                            <Link
+                                href="/admin"
+                                className="text-xl font-medium text-slate-700 hover:text-milan-red py-3 border-b border-gray-100 transition-colors flex items-center gap-2"
+                                onClick={() => setIsOpen(false)}
+                            >
+                                <Settings className="w-5 h-5" />
+                                管理画面
+                            </Link>
+                        )}
 
                         <div className="mt-6 flex flex-col gap-4">
                             <div className="flex items-center justify-between">
