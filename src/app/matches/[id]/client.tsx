@@ -156,7 +156,7 @@ export function MatchDetailClient({
     };
 
     const getResultBadge = () => {
-        if (!match.is_finished || match.home_score === null || match.away_score === null) {
+        if (match.status !== 'finished' || match.home_score === null || match.away_score === null) {
             return null;
         }
 
@@ -194,7 +194,7 @@ export function MatchDetailClient({
 
             <div className="container mx-auto px-4 py-8 space-y-8">
                 {/* Realtime Connection Indicator */}
-                {match.is_finished && !isUsingMockData && (
+                {match.status === 'finished' && !isUsingMockData && (
                     <div className={`flex items-center gap-2 text-xs ${isConnected ? 'text-green-600' : 'text-muted-foreground'}`}>
                         {isConnected ? (
                             <>
@@ -226,7 +226,7 @@ export function MatchDetailClient({
                 )}
 
                 {/* MVP Banner - show only for finished matches with ratings */}
-                {match.is_finished && Object.keys(ratings).length > 0 && (
+                {match.status === 'finished' && Object.keys(ratings).length > 0 && (
                     <TopRatedBanner players={players} ratings={ratings} />
                 )}
 
@@ -262,7 +262,7 @@ export function MatchDetailClient({
                                 </>
                             )}
                             {/* Home Goals */}
-                            {match.is_finished && events.filter(e => e.event_type === 'goal').length > 0 && (
+                            {match.status === 'finished' && events.filter(e => e.event_type === 'goal').length > 0 && (
                                 <div className="mt-2 text-xs text-slate-400 space-y-0.5">
                                     {events
                                         .filter(e => e.event_type === 'goal')
@@ -285,7 +285,7 @@ export function MatchDetailClient({
 
                         {/* Score */}
                         <div className="flex flex-col items-center">
-                            {match.is_finished ? (
+                            {match.status === 'finished' ? (
                                 <>
                                     <div className="flex items-center gap-3 text-4xl md:text-5xl font-bold">
                                         <span className={
@@ -340,7 +340,7 @@ export function MatchDetailClient({
                                 </>
                             )}
                             {/* Away Goals - Right side shows away team goals */}
-                            {match.is_finished && events.filter(e => e.event_type === 'goal').length > 0 && (
+                            {match.status === 'finished' && events.filter(e => e.event_type === 'goal').length > 0 && (
                                 <div className="mt-2 text-xs text-slate-400 space-y-0.5">
                                     {events
                                         .filter(e => e.event_type === 'goal')
@@ -372,7 +372,7 @@ export function MatchDetailClient({
                 </div>
 
                 {/* Player Ratings Section */}
-                {match.is_finished ? (
+                {match.status === 'finished' ? (
                     <div className="space-y-8">
                         <div className="flex items-center gap-2">
                             <Users className="w-5 h-5 text-primary" />

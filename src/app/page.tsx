@@ -52,14 +52,14 @@ export default async function Home() {
   const players = supabasePlayers || MOCK_PLAYERS;
   const isUsingMockData = !supabaseMatches;
 
-  // 今後の試合: 昇順（近い順）
+  // 今後の試合: 昇順（近い順）- upcoming + live
   const upcomingMatches = [...matches]
-    .filter(m => !m.is_finished)
+    .filter(m => m.status !== 'finished')
     .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
 
   // 試合結果: 降順（最新順）
   const finishedMatches = [...matches]
-    .filter(m => m.is_finished)
+    .filter(m => m.status === 'finished')
     .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime());
 
   // ホームページ表示用：次の4試合、最新の4結果
@@ -170,7 +170,7 @@ export default async function Home() {
               matchDate={match.match_date}
               homeScore={match.home_score}
               awayScore={match.away_score}
-              isFinished={match.is_finished}
+              isFinished={match.status === 'finished'}
               competition={match.competition || 'League'}
               isHome={match.is_home ?? true}
             />
@@ -205,7 +205,7 @@ export default async function Home() {
                 matchDate={match.match_date}
                 homeScore={match.home_score}
                 awayScore={match.away_score}
-                isFinished={match.is_finished}
+                isFinished={match.status === 'finished'}
                 competition={match.competition || 'League'}
                 isHome={match.is_home ?? true}
               />

@@ -16,17 +16,21 @@ export interface Season {
     is_current: boolean;
 }
 
+export type MatchStatus = 'upcoming' | 'live' | 'finished';
+
 export interface Match {
     id: string;
     opponent_name: string;
     match_date: string;
     home_score: number | null;
     away_score: number | null;
-    is_finished: boolean;
+    is_finished: boolean; // レガシー互換（status === 'finished' と同義）
+    status: MatchStatus;
     competition: string | null;
     season_id: string | null;
     is_home: boolean | null;
     formation: string | null;
+    external_id?: string | null;
 }
 
 export interface MatchEvent {
@@ -49,6 +53,7 @@ export interface MatchLineup {
     position_role: 'GK' | 'DF' | 'MF' | 'FW';
     position_x: number;
     position_y: number;
+    minutes_played?: number;
 }
 
 export interface Player {
@@ -56,11 +61,13 @@ export interface Player {
     name: string;
     number: number;
     position: string | null;
+    is_active: boolean;
     pixel_config: {
         skinTone: 'light' | 'medium' | 'dark';
         hairStyle: 'short' | 'medium' | 'bald' | 'afro';
         hairColor: 'black' | 'brown' | 'blonde';
     } | null;
+    external_id?: string | null;
 }
 
 export interface PlayerSeason {
@@ -128,6 +135,11 @@ export interface Database {
                 Row: MatchPlayer;
                 Insert: Omit<MatchPlayer, 'id'> & { id?: string };
                 Update: Partial<MatchPlayer>;
+            };
+            match_lineups: {
+                Row: MatchLineup;
+                Insert: Omit<MatchLineup, 'id'> & { id?: string };
+                Update: Partial<MatchLineup>;
             };
             ratings: {
                 Row: Rating;

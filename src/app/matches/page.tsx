@@ -23,11 +23,11 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
     // Filter and sort matches appropriately
     // 今後 = 昇順（近い順）、結果 = 降順（最新順）
     const finishedMatches = [...allMatches]
-        .filter(m => m.is_finished)
+        .filter(m => m.status === 'finished')
         .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime()); // 降順
 
     const upcomingMatches = [...allMatches]
-        .filter(m => !m.is_finished)
+        .filter(m => m.status !== 'finished')
         .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime()); // 昇順
 
     // "all" の場合は今後を先に、次に結果を表示
@@ -82,7 +82,7 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
                         matchDate={match.match_date}
                         homeScore={match.home_score}
                         awayScore={match.away_score}
-                        isFinished={match.is_finished}
+                        isFinished={match.status === 'finished'}
                         competition={match.competition || 'Serie A'}
                         isHome={match.is_home ?? true}
                     />

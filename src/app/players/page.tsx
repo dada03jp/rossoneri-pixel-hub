@@ -61,6 +61,7 @@ export default async function PlayersPage() {
         name: player.name as string,
         number: player.number as number,
         position: player.position as string | null,
+        is_active: (player.is_active as boolean) ?? true,
         pixel_config: (player.pixel_config || { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' }) as PixelConfig,
         player_seasons: ((player.player_seasons as Array<{
             season_id: string;

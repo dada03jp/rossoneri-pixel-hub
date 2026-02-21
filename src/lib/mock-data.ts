@@ -8,6 +8,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Mike Maignan',
         number: 16,
         position: 'GK',
+        is_active: true,
         pixel_config: { skinTone: 'dark', hairStyle: 'short', hairColor: 'black' },
     },
     {
@@ -15,6 +16,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Davide Calabria',
         number: 2,
         position: 'DF',
+        is_active: false,
         pixel_config: { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' },
     },
     {
@@ -22,6 +24,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Fikayo Tomori',
         number: 23,
         position: 'DF',
+        is_active: true,
         pixel_config: { skinTone: 'dark', hairStyle: 'short', hairColor: 'black' },
     },
     {
@@ -29,6 +32,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Malick Thiaw',
         number: 28,
         position: 'DF',
+        is_active: false,
         pixel_config: { skinTone: 'dark', hairStyle: 'short', hairColor: 'black' },
     },
     {
@@ -36,6 +40,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Theo Hernández',
         number: 19,
         position: 'DF',
+        is_active: false,
         pixel_config: { skinTone: 'medium', hairStyle: 'medium', hairColor: 'brown' },
     },
     {
@@ -43,6 +48,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Ismaël Bennacer',
         number: 4,
         position: 'MF',
+        is_active: false,
         pixel_config: { skinTone: 'medium', hairStyle: 'short', hairColor: 'black' },
     },
     {
@@ -50,6 +56,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Tijjani Reijnders',
         number: 14,
         position: 'MF',
+        is_active: false,
         pixel_config: { skinTone: 'light', hairStyle: 'medium', hairColor: 'brown' },
     },
     {
@@ -57,6 +64,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Christian Pulisic',
         number: 11,
         position: 'MF',
+        is_active: true,
         pixel_config: { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' },
     },
     {
@@ -64,6 +72,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Rafael Leão',
         number: 10,
         position: 'FW',
+        is_active: true,
         pixel_config: { skinTone: 'dark', hairStyle: 'afro', hairColor: 'black' },
     },
     {
@@ -71,6 +80,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Álvaro Morata',
         number: 7,
         position: 'FW',
+        is_active: false,
         pixel_config: { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' },
     },
     {
@@ -78,6 +88,7 @@ export const MOCK_PLAYERS: (Player & { pixel_config: PixelConfig })[] = [
         name: 'Samuel Chukwueze',
         number: 21,
         position: 'FW',
+        is_active: false,
         pixel_config: { skinTone: 'dark', hairStyle: 'short', hairColor: 'black' },
     },
 ];
@@ -90,6 +101,7 @@ export const MOCK_MATCHES: Match[] = [
         home_score: 2,
         away_score: 1,
         is_finished: true,
+        status: 'finished',
         competition: 'Serie A',
         season_id: 'mock-25-26',
         is_home: true,
@@ -102,6 +114,7 @@ export const MOCK_MATCHES: Match[] = [
         home_score: null,
         away_score: null,
         is_finished: false,
+        status: 'upcoming',
         competition: 'Serie A',
         season_id: 'mock-25-26',
         is_home: false,
@@ -114,6 +127,7 @@ export const MOCK_MATCHES: Match[] = [
         home_score: 3,
         away_score: 0,
         is_finished: true,
+        status: 'finished',
         competition: 'Serie A',
         season_id: 'mock-25-26',
         is_home: true,
@@ -126,6 +140,7 @@ export const MOCK_MATCHES: Match[] = [
         home_score: null,
         away_score: null,
         is_finished: false,
+        status: 'upcoming',
         competition: 'UCL',
         season_id: 'mock-25-26',
         is_home: false,
@@ -138,6 +153,7 @@ export const MOCK_MATCHES: Match[] = [
         home_score: 1,
         away_score: 1,
         is_finished: true,
+        status: 'finished',
         competition: 'Serie A',
         season_id: 'mock-24-25',
         is_home: true,
