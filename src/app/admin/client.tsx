@@ -213,7 +213,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             const existing = data?.find((ml: any) => ml.player_id === p.id);
             newLineup[p.id] = {
                 selected: !!existing,
-                isStarter: existing?.is_starter ?? false,
+                isStarter: existing?.is_starter ?? true,
             };
         });
         setLineup(newLineup);
@@ -650,7 +650,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                         checked={lineup[player.id]?.selected || false}
                                                         onChange={e => setLineup(prev => ({
                                                             ...prev,
-                                                            [player.id]: { ...prev[player.id], selected: e.target.checked }
+                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked }
                                                         }))}
                                                         className="w-5 h-5 rounded"
                                                     />
