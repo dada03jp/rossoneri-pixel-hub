@@ -15,8 +15,9 @@ export function Header() {
 
     useEffect(() => {
         const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            setIsAdmin(user?.email === ADMIN_EMAIL);
+        // getSession はローカルストレージから読むため確実
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setIsAdmin(session?.user?.email === ADMIN_EMAIL);
         });
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setIsAdmin(session?.user?.email === ADMIN_EMAIL);
