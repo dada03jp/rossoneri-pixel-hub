@@ -63,7 +63,8 @@ export function AuthButton() {
                 {isAdmin && (
                     <Link
                         href="/admin"
-                        className="flex items-center gap-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-md transition-colors"
+                        className="flex items-center gap-1.5 text-xs font-medium rounded-md transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: '#be123c', color: '#ffffff', padding: '6px 12px' }}
                     >
                         <Settings className="w-3.5 h-3.5" />
                         管理画面
