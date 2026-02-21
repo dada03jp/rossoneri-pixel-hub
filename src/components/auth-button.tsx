@@ -2,8 +2,11 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { LogIn, LogOut, User as UserIcon, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+const ADMIN_EMAIL = 'marketing.workself@gmail.com';
 
 export function AuthButton() {
     const [user, setUser] = useState<User | null>(null);
@@ -54,8 +57,18 @@ export function AuthButton() {
     }
 
     if (user) {
+        const isAdmin = user.email === ADMIN_EMAIL;
         return (
             <div className="flex items-center gap-3">
+                {isAdmin && (
+                    <Link
+                        href="/admin"
+                        className="flex items-center gap-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                        管理画面
+                    </Link>
+                )}
                 <div className="flex items-center gap-2">
                     {user.user_metadata?.avatar_url ? (
                         <img
