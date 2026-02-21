@@ -261,21 +261,28 @@ export function MatchDetailClient({
                                     <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
                                 </>
                             )}
-                            {/* Home Goals */}
-                            {match.status === 'finished' && events.filter(e => e.event_type === 'goal').length > 0 && (
+                            {/* Home Team Events (Goals & Cards) */}
+                            {match.status === 'finished' && events.length > 0 && (
                                 <div className="mt-2 text-xs text-slate-400 space-y-0.5">
                                     {events
-                                        .filter(e => e.event_type === 'goal')
+                                        .filter(e => ['goal', 'yellow_card', 'red_card'].includes(e.event_type))
                                         .filter(e => {
-                                            // Match is_home: true = Milan is home team
-                                            // Home side shows: Milan goals if is_home, opponent goals if !is_home
-                                            const isMilanGoal = String(e.details?.is_milan) === 'true';
-                                            return match.is_home ? isMilanGoal : !isMilanGoal;
+                                            // is_milan defaults to true for admin-created events
+                                            const isMilanEvent = String(e.details?.is_milan) !== 'false';
+                                            // Home side shows: Milan events if is_home, opponent events if !is_home
+                                            return match.is_home ? isMilanEvent : !isMilanEvent;
                                         })
+                                        .sort((a, b) => a.minute - b.minute)
                                         .map((e, i) => (
                                             <div key={i}>
+                                                {e.event_type === 'goal' && '⚽ '}
+                                                {e.event_type === 'yellow_card' && '🟨 '}
+                                                {e.event_type === 'red_card' && '🟥 '}
                                                 {e.player_name.split(' ').pop()} {e.minute}&apos;
-                                                {String(e.details?.penalty) === 'true' && ' (PK)'}
+                                                {e.event_type === 'goal' && String(e.details?.penalty) === 'true' && ' (PK)'}
+                                                {e.event_type === 'goal' && e.details?.assisted_by && (
+                                                    <span className="text-slate-500"> (🅰️{String(e.details.assisted_by).split(' ').pop()})</span>
+                                                )}
                                             </div>
                                         ))
                                     }
@@ -339,20 +346,27 @@ export function MatchDetailClient({
                                     <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
                                 </>
                             )}
-                            {/* Away Goals - Right side shows away team goals */}
-                            {match.status === 'finished' && events.filter(e => e.event_type === 'goal').length > 0 && (
+                            {/* Away Team Events (Goals & Cards) */}
+                            {match.status === 'finished' && events.length > 0 && (
                                 <div className="mt-2 text-xs text-slate-400 space-y-0.5">
                                     {events
-                                        .filter(e => e.event_type === 'goal')
+                                        .filter(e => ['goal', 'yellow_card', 'red_card'].includes(e.event_type))
                                         .filter(e => {
-                                            // Away side shows: Milan goals if !is_home, opponent goals if is_home
-                                            const isMilanGoal = String(e.details?.is_milan) === 'true';
-                                            return match.is_home ? !isMilanGoal : isMilanGoal;
+                                            const isMilanEvent = String(e.details?.is_milan) !== 'false';
+                                            // Away side shows: Milan events if !is_home, opponent events if is_home
+                                            return match.is_home ? !isMilanEvent : isMilanEvent;
                                         })
+                                        .sort((a, b) => a.minute - b.minute)
                                         .map((e, i) => (
                                             <div key={i}>
+                                                {e.event_type === 'goal' && '⚽ '}
+                                                {e.event_type === 'yellow_card' && '🟨 '}
+                                                {e.event_type === 'red_card' && '🟥 '}
                                                 {e.player_name.split(' ').pop()} {e.minute}&apos;
-                                                {String(e.details?.penalty) === 'true' && ' (PK)'}
+                                                {e.event_type === 'goal' && String(e.details?.penalty) === 'true' && ' (PK)'}
+                                                {e.event_type === 'goal' && e.details?.assisted_by && (
+                                                    <span className="text-slate-500"> (🅰️{String(e.details.assisted_by).split(' ').pop()})</span>
+                                                )}
                                             </div>
                                         ))
                                     }

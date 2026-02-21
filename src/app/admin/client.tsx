@@ -138,22 +138,25 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
         setSaving(true);
         const supabase = createClient();
 
+        // 管理画面から追加するイベントはすべてミラン側
+        const details: Record<string, unknown> = { is_milan: true };
+
+        // アシスト情報を追加
+        if (newEvent.event_type === 'goal' && newEvent.assisted_by_id) {
+            const assistPlayer = activePlayers.find(p => p.id === newEvent.assisted_by_id);
+            if (assistPlayer) {
+                details.assisted_by = assistPlayer.name;
+            }
+        }
+
         const eventData: Record<string, unknown> = {
             match_id: eventMatchId,
             event_type: newEvent.event_type,
             player_id: newEvent.player_id,
             player_name: player.name,
             minute: newEvent.minute,
-            details: {},
+            details,
         };
-
-        // アシスト情報を追加
-        if (newEvent.event_type === 'goal' && newEvent.assisted_by_id) {
-            const assistPlayer = activePlayers.find(p => p.id === newEvent.assisted_by_id);
-            if (assistPlayer) {
-                eventData.details = { assisted_by: assistPlayer.name };
-            }
-        }
 
         const { data, error } = await supabase
             .from('match_events')
@@ -652,8 +655,8 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                                 [player.id]: { ...prev[player.id], isStarter: !prev[player.id].isStarter }
                                                             }))}
                                                             className={`text-xs px-3 py-1.5 rounded-lg font-medium active:scale-95 transition-all ${lineup[player.id]?.isStarter
-                                                                    ? 'bg-green-100 text-green-700'
-                                                                    : 'bg-gray-100 text-gray-600'
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : 'bg-gray-100 text-gray-600'
                                                                 }`}
                                                         >
                                                             {lineup[player.id]?.isStarter ? 'スタメン' : 'サブ'}
