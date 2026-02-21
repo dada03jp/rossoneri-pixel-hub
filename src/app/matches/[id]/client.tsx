@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getTeamColors } from '@/lib/team-colors';
 import { User } from '@supabase/supabase-js';
 import { useRealtimeRatings } from '@/hooks/use-realtime-ratings';
+import { LoginModal } from '@/components/auth/login-modal';
 
 interface MatchDetailClientProps {
     match: Match;
@@ -39,6 +40,7 @@ export function MatchDetailClient({
     const [userRatings, setUserRatings] = useState<Record<string, { score: number; comment: string }>>({});
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
     // Get current user and their existing ratings
     useEffect(() => {
@@ -107,7 +109,7 @@ export function MatchDetailClient({
 
     const handleSubmitRating = async (playerId: string, score: number, comment: string) => {
         if (!user) {
-            alert('採点するにはログインが必要です');
+            setIsLoginModalOpen(true);
             return;
         }
 
@@ -139,13 +141,7 @@ export function MatchDetailClient({
     };
 
     const handleSignIn = async () => {
-        const supabase = createClient();
-        await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: `${window.location.origin}/auth/callback?next=${window.location.pathname}`,
-            },
-        });
+        setIsLoginModalOpen(true);
     };
 
     const formatDate = (dateString: string) => {
@@ -186,6 +182,10 @@ export function MatchDetailClient({
 
     return (
         <div className="-mt-8 -mx-4">
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => setIsLoginModalOpen(false)}
+            />
             {/* Custom Header for this page */}
             <BackHeader
                 title={`AC Milan vs ${match.opponent_name}`}
