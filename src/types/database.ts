@@ -5,6 +5,7 @@ export interface Profile {
     username: string | null;
     avatar_url: string | null;
     is_premium: boolean;
+    plan_type: 'free' | 'premium';
     updated_at: string | null;
 }
 
@@ -94,10 +95,91 @@ export interface Rating {
     player_id: string;
     score: number;
     comment: string | null;
+    user_name: string | null;
     created_at: string;
 }
 
-// Join types for queries
+// ========== コミュニティ機能 ==========
+
+export interface CommentLike {
+    id: string;
+    rating_id: string;
+    user_id: string;
+    created_at: string;
+}
+
+export interface CommentReply {
+    id: string;
+    rating_id: string;
+    user_id: string;
+    content: string;
+    created_at: string;
+}
+
+export interface Notification {
+    id: string;
+    user_id: string;
+    actor_id: string | null;
+    type: 'like' | 'reply';
+    rating_id: string | null;
+    reply_id: string | null;
+    is_read: boolean;
+    created_at: string;
+}
+
+// ========== View / 集計型 ==========
+
+export interface PlayerSeasonStats {
+    player_id: string;
+    name: string;
+    number: number;
+    position: string | null;
+    is_active: boolean;
+    pixel_config: Player['pixel_config'];
+    avg_rating: number;
+    rated_matches: number;
+    total_ratings: number;
+    goals: number;
+    assists: number;
+    yellow_cards: number;
+    red_cards: number;
+    appearances: number;
+}
+
+export interface UserStats {
+    total_ratings: number;
+    matches_rated: number;
+    favorite_player: {
+        name: string;
+        number: number;
+        avg_score: number;
+        count: number;
+    } | null;
+    recent_ratings: {
+        score: number;
+        comment: string | null;
+        created_at: string;
+        opponent_name: string;
+        match_date: string;
+        is_home: boolean;
+        player_name: string;
+        player_number: number;
+    }[];
+    rated_matches: {
+        id: string;
+        opponent_name: string;
+        match_date: string;
+        home_score: number;
+        away_score: number;
+        is_home: boolean;
+        competition: string;
+        player_count: number;
+        avg_given: number;
+    }[];
+}
+
+// ========== Join types ==========
+
 export interface MatchWithDetails extends Match {
     match_players?: (MatchPlayer & { player: Player })[];
 }
@@ -112,7 +194,16 @@ export interface RatingWithUser extends Rating {
     user?: Profile;
 }
 
-// Database type for Supabase client
+export interface RatingWithLikes extends Rating {
+    user?: Profile;
+    likes_count: number;
+    replies_count: number;
+    user_has_liked: boolean;
+    replies?: (CommentReply & { user?: Profile })[];
+}
+
+// ========== Database type for Supabase client ==========
+
 export interface Database {
     public: {
         Tables: {
@@ -145,6 +236,32 @@ export interface Database {
                 Row: Rating;
                 Insert: Omit<Rating, 'id' | 'created_at'> & { id?: string; created_at?: string };
                 Update: Partial<Rating>;
+            };
+            comment_likes: {
+                Row: CommentLike;
+                Insert: Omit<CommentLike, 'id' | 'created_at'> & { id?: string; created_at?: string };
+                Update: Partial<CommentLike>;
+            };
+            comment_replies: {
+                Row: CommentReply;
+                Insert: Omit<CommentReply, 'id' | 'created_at'> & { id?: string; created_at?: string };
+                Update: Partial<CommentReply>;
+            };
+            notifications: {
+                Row: Notification;
+                Insert: Omit<Notification, 'id' | 'created_at' | 'is_read'> & { id?: string; created_at?: string; is_read?: boolean };
+                Update: Partial<Notification>;
+            };
+        };
+        Views: {
+            player_season_stats: {
+                Row: PlayerSeasonStats;
+            };
+        };
+        Functions: {
+            get_user_stats: {
+                Args: { target_user_id: string };
+                Returns: UserStats;
             };
         };
     };
