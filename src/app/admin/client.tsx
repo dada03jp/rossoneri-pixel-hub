@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Match, Player, MatchEvent } from '@/types/database';
 import { Trophy, Users, Settings, Plus, Save, Check, X, AlertTriangle } from 'lucide-react';
@@ -196,9 +196,18 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
 
     // ========== ラインナップ管理 ==========
     const [selectedMatchId, setSelectedMatchId] = useState<string>('');
-    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string }>>({});
+    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number }>>({});
     const [loadingLineup, setLoadingLineup] = useState(false);
     const [selectedFormation, setSelectedFormation] = useState('4-3-3');
+    const [templates, setTemplates] = useState<{ id: string; name: string; formation_type: string; positions: any[] }[]>([]);
+
+    // テンプレート読み込み
+    useEffect(() => {
+        const supabase = createClient();
+        supabase.from('formation_templates').select('*').then(({ data }) => {
+            if (data) setTemplates(data as any);
+        });
+    }, []);
 
     const loadLineup = async (matchId: string) => {
         setSelectedMatchId(matchId);
@@ -209,7 +218,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .select('*')
             .eq('match_id', matchId);
 
-        const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string }> = {};
+        const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number }> = {};
         activePlayers.forEach(p => {
             const existing = data?.find((ml: any) => ml.player_id === p.id);
             newLineup[p.id] = {
@@ -217,6 +226,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                 isStarter: existing?.is_starter ?? true,
                 role: existing?.role || existing?.position_role || p.position || 'MF',
                 positionSide: existing?.position_side || 'Center',
+                positionRow: existing?.position_row || (({ 'GK': 1, 'DF': 2, 'CB': 2, 'WB': 3, 'DM': 3, 'CM': 4, 'MF': 4, 'AM': 4, 'FW': 5, 'ST': 5 } as Record<string, number>)[existing?.role || p.position || 'MF'] || 3),
             };
         });
         setLineup(newLineup);
@@ -255,6 +265,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                     position_role: v.role || player?.position || 'MF',
                     role: v.role || player?.position || 'MF',
                     position_side: v.positionSide || 'Center',
+                    position_row: v.positionRow || 3,
                 };
             });
 
@@ -670,6 +681,88 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                     <option value="4-3-1-2">4-3-1-2</option>
                                 </select>
                             </div>
+                            {/* テンプレート適用 */}
+                            {templates.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm font-bold text-muted-foreground">テンプレート:</span>
+                                    <select
+                                        onChange={e => {
+                                            const tmpl = templates.find(t => t.id === e.target.value);
+                                            if (!tmpl) return;
+                                            setSelectedFormation(tmpl.formation_type);
+                                            // 選択済みスタメンに自動適用
+                                            const selectedStarters = Object.entries(lineup)
+                                                .filter(([_, v]) => v.selected && v.isStarter)
+                                                .map(([id]) => id);
+                                            const positions = tmpl.positions as { role: string; position_row: number; position_side: string }[];
+                                            setLineup(prev => {
+                                                const next = { ...prev };
+                                                selectedStarters.forEach((pid, i) => {
+                                                    if (i < positions.length) {
+                                                        next[pid] = {
+                                                            ...next[pid],
+                                                            role: positions[i].role,
+                                                            positionRow: positions[i].position_row,
+                                                            positionSide: positions[i].position_side,
+                                                        };
+                                                    }
+                                                });
+                                                return next;
+                                            });
+                                        }}
+                                        defaultValue=""
+                                        className="px-3 py-2 border rounded-xl text-sm"
+                                    >
+                                        <option value="" disabled>適用するテンプレート...</option>
+                                        {templates.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name} ({t.formation_type})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {/* ミニ ピッチプレビュー */}
+                            {(() => {
+                                const starterEntries = Object.entries(lineup).filter(([_, v]) => v.selected && v.isStarter);
+                                if (starterEntries.length === 0) return null;
+                                const rowYMap: Record<number, number> = { 1: 88, 2: 72, 3: 54, 4: 36, 5: 18 };
+                                const roleToRow: Record<string, number> = { GK: 1, CB: 2, DF: 2, WB: 3, DM: 3, CM: 4, MF: 4, AM: 4, ST: 5, FW: 5 };
+                                return (
+                                    <div className="relative w-full aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border border-green-800" style={{ maxHeight: '200px' }}>
+                                        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/20" />
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border border-white/20 rounded-full" />
+                                        {starterEntries.map(([pid, v]) => {
+                                            const player = activePlayers.find(p => p.id === pid);
+                                            if (!player) return null;
+                                            const row = v.positionRow || roleToRow[v.role] || 3;
+                                            const y = rowYMap[row] ?? 50;
+                                            // X calculation
+                                            let x = 50;
+                                            if (v.positionSide === 'Left') x = row === 3 ? 12 : 18;
+                                            else if (v.positionSide === 'Right') x = row === 3 ? 88 : 82;
+                                            else {
+                                                const centersInRow = starterEntries.filter(([_, sv]) => {
+                                                    const sRow = sv.positionRow || roleToRow[sv.role] || 3;
+                                                    return sRow === row && sv.positionSide === 'Center';
+                                                });
+                                                const idx = centersInRow.findIndex(([id]) => id === pid);
+                                                const count = Math.max(centersInRow.length, 1);
+                                                if (count > 1) {
+                                                    const spread = count <= 2 ? 28 : 22;
+                                                    x = 50 - ((count - 1) * spread) / 2 + idx * spread;
+                                                }
+                                            }
+                                            return (
+                                                <div key={pid} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style={{ left: `${x}%`, top: `${y}%` }}>
+                                                    <div className="w-5 h-5 bg-red-600 border border-white rounded-full flex items-center justify-center text-[8px] text-white font-bold">
+                                                        {player.number}
+                                                    </div>
+                                                    <span className="text-[7px] text-white bg-black/50 px-0.5 rounded mt-0.5 whitespace-nowrap">{player.name.split(' ').pop()}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                             <div className="space-y-2">
                                 {['GK', 'DF', 'MF', 'FW'].map(pos => {
                                     const posPlayers = activePlayers.filter(p => p.position === pos);
@@ -684,7 +777,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                         checked={lineup[player.id]?.selected || false}
                                                         onChange={e => setLineup(prev => ({
                                                             ...prev,
-                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked, role: prev[player.id]?.role || player.position || 'MF', positionSide: prev[player.id]?.positionSide || 'Center' }
+                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked, role: prev[player.id]?.role || player.position || 'MF', positionSide: prev[player.id]?.positionSide || 'Center', positionRow: prev[player.id]?.positionRow || 3 }
                                                         }))}
                                                         className="w-5 h-5 rounded"
                                                     />
@@ -715,9 +808,26 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                                         className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
                                                                     >
                                                                         <option value="GK">GK</option>
-                                                                        <option value="DF">DF</option>
-                                                                        <option value="MF">MF</option>
-                                                                        <option value="FW">FW</option>
+                                                                        <option value="CB">CB</option>
+                                                                        <option value="WB">WB</option>
+                                                                        <option value="DM">DM</option>
+                                                                        <option value="CM">CM</option>
+                                                                        <option value="AM">AM</option>
+                                                                        <option value="ST">ST</option>
+                                                                    </select>
+                                                                    <select
+                                                                        value={lineup[player.id]?.positionRow || 3}
+                                                                        onChange={e => setLineup(prev => ({
+                                                                            ...prev,
+                                                                            [player.id]: { ...prev[player.id], positionRow: Number(e.target.value) }
+                                                                        }))}
+                                                                        className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                                                                    >
+                                                                        <option value={1}>Row1 (GK)</option>
+                                                                        <option value={2}>Row2 (DF)</option>
+                                                                        <option value={3}>Row3 (DM/WB)</option>
+                                                                        <option value={4}>Row4 (CM/AM)</option>
+                                                                        <option value={5}>Row5 (FW)</option>
                                                                     </select>
                                                                     <select
                                                                         value={lineup[player.id]?.positionSide || 'Center'}

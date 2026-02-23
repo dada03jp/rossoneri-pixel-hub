@@ -6,6 +6,7 @@ export interface Profile {
     avatar_url: string | null;
     is_premium: boolean;
     plan_type: 'free' | 'premium';
+    stripe_customer_id?: string | null;
     updated_at: string | null;
 }
 
@@ -25,7 +26,7 @@ export interface Match {
     match_date: string;
     home_score: number | null;
     away_score: number | null;
-    is_finished: boolean; // レガシー互換（status === 'finished' と同義）
+    is_finished: boolean;
     status: MatchStatus;
     competition: string | null;
     season_id: string | null;
@@ -44,6 +45,11 @@ export interface MatchEvent {
     details: Record<string, string>;
 }
 
+// 詳細ロール
+export type DetailedRole = 'GK' | 'CB' | 'WB' | 'DM' | 'CM' | 'AM' | 'ST';
+// レガシー互換ロール
+export type LegacyRole = 'GK' | 'DF' | 'MF' | 'FW';
+
 export interface MatchLineup {
     id: string;
     match_id: string;
@@ -51,9 +57,10 @@ export interface MatchLineup {
     player_name: string;
     jersey_number: number;
     is_starter: boolean;
-    position_role: 'GK' | 'DF' | 'MF' | 'FW';
-    role: 'GK' | 'DF' | 'MF' | 'FW';
+    position_role: LegacyRole;
+    role: DetailedRole | LegacyRole;
     position_side: 'Left' | 'Center' | 'Right';
+    position_row: number; // 1:GK, 2:DF, 3:DM/WB, 4:CM/AM, 5:FW
     position_x: number;
     position_y: number;
     minutes_played?: number;
@@ -114,6 +121,7 @@ export interface CommentReply {
     id: string;
     rating_id: string;
     user_id: string;
+    user_name?: string | null;
     content: string;
     created_at: string;
 }
@@ -126,6 +134,22 @@ export interface Notification {
     rating_id: string | null;
     reply_id: string | null;
     is_read: boolean;
+    created_at: string;
+}
+
+// ========== フォーメーションテンプレート ==========
+
+export interface FormationTemplatePosition {
+    role: DetailedRole;
+    position_row: number;
+    position_side: 'Left' | 'Center' | 'Right';
+}
+
+export interface FormationTemplate {
+    id: string;
+    name: string;
+    formation_type: string;
+    positions: FormationTemplatePosition[];
     created_at: string;
 }
 
@@ -253,6 +277,11 @@ export interface Database {
                 Row: Notification;
                 Insert: Omit<Notification, 'id' | 'created_at' | 'is_read'> & { id?: string; created_at?: string; is_read?: boolean };
                 Update: Partial<Notification>;
+            };
+            formation_templates: {
+                Row: FormationTemplate;
+                Insert: Omit<FormationTemplate, 'id' | 'created_at'> & { id?: string; created_at?: string };
+                Update: Partial<FormationTemplate>;
             };
         };
         Views: {

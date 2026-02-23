@@ -4,7 +4,7 @@ import { BackHeader } from '@/components/header';
 import { MatchRatingCard } from '@/components/players/MatchRatingCard';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
-import { FormationDisplay } from '@/components/formation-display';
+import { PlayerCommentModal } from '@/components/PlayerCommentModal';
 import { EventTimeline } from '@/components/event-timeline';
 import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
@@ -24,40 +24,58 @@ interface MatchDetailClientProps {
     lineups: MatchLineup[];
 }
 
-// フォーメーション座標計算ヘルパー
+// フォーメーション座標計算ヘルパー（position_row + role + side 対応）
 function getFormationPosition(
     role: string,
     side: string,
     formation: string,
     allStarters: any[],
-    playerId: string
+    playerId: string,
+    positionRow?: number
 ): { x: number; y: number } {
-    // Y座標（行: 上がFW、下がGK）
-    const yMap: Record<string, number> = { GK: 88, DF: 70, MF: 48, FW: 22 };
-    const y = yMap[role] ?? 50;
+    // --- Y座標: position_row があればそれを使う、なければ role から推定 ---
+    const rowYMap: Record<number, number> = {
+        1: 90,  // GK
+        2: 74,  // DF (CB, WB at DF row)
+        3: 56,  // DM / WB (3-5-2 style)
+        4: 38,  // CM / AM
+        5: 18,  // FW / ST
+    };
+    const roleToRow: Record<string, number> = {
+        GK: 1, CB: 2, DF: 2, WB: 3, DM: 3, CM: 4, MF: 4, AM: 4, ST: 5, FW: 5,
+    };
+    const effectiveRow = positionRow || roleToRow[role] || 3;
+    const y = rowYMap[effectiveRow] ?? 50;
 
-    // 同じroleの選手を抽出して左右に分散
-    const sameRole = allStarters.filter(p => {
-        const pr = (p as any).__role || role;
-        return pr === role;
+    // --- X座標: side ベース + 同 row 内での分散 ---
+    // 同じ row の選手を抽出
+    const sameRow = allStarters.filter(p => {
+        const pRow = (p as any).__positionRow || roleToRow[(p as any).__role] || 3;
+        return pRow === effectiveRow;
     });
 
-    // side-based X
-    if (side === 'Left') return { x: 18, y };
-    if (side === 'Right') return { x: 82, y };
+    // Left/Right は固定位置（row に応じた微調整で WB と SB の重なりを回避）
+    if (side === 'Left') {
+        const xOffset = effectiveRow === 3 ? 12 : effectiveRow === 2 ? 16 : 20;
+        return { x: xOffset, y };
+    }
+    if (side === 'Right') {
+        const xOffset = effectiveRow === 3 ? 88 : effectiveRow === 2 ? 84 : 80;
+        return { x: xOffset, y };
+    }
 
-    // Center: 同ロールのセンター選手の数に応じて分散
-    const centers = allStarters.filter(p => {
+    // Center: 同 row・同 side の選手をカウントして等間隔に配置
+    const centersInRow = sameRow.filter(p => {
         const pSide = (p as any).__side || 'Center';
-        const pRole = (p as any).__role || role;
-        return pRole === role && pSide === 'Center';
+        return pSide === 'Center';
     });
-    const idx = centers.findIndex(p => p.id === playerId);
-    const count = Math.max(centers.length, 1);
+    const idx = centersInRow.findIndex(p => p.id === playerId);
+    const count = Math.max(centersInRow.length, 1);
     if (count === 1) return { x: 50, y };
-    const spacing = 28;
-    const startX = 50 - ((count - 1) * spacing) / 2;
-    return { x: startX + idx * spacing, y };
+    // 動的スペーシング: 2人なら広め、3人以上なら詰める
+    const maxSpread = count <= 2 ? 30 : 24;
+    const startX = 50 - ((count - 1) * maxSpread) / 2;
+    return { x: startX + idx * maxSpread, y };
 }
 
 export function MatchDetailClient({
@@ -120,8 +138,16 @@ export function MatchDetailClient({
 
     // Separate starters and substitutes
     const { starters, substitutes } = useMemo(() => {
-        const starterList = players.filter((p: any) => p.is_starter === true);
-        const subList = players.filter((p: any) => p.is_starter === false);
+        // player.id ベースで重複排除
+        const seen = new Set<string>();
+        const starterList: typeof players = [];
+        const subList: typeof players = [];
+        players.forEach(p => {
+            if (seen.has(p.id)) return;
+            seen.add(p.id);
+            if ((p as any).is_starter === true) starterList.push(p);
+            else subList.push(p);
+        });
         return { starters: starterList, substitutes: subList };
     }, [players]);
 
@@ -223,6 +249,28 @@ export function MatchDetailClient({
                 isOpen={isLoginModalOpen}
                 onClose={() => setIsLoginModalOpen(false)}
             />
+            {/* Player Comment Modal */}
+            {selectedPlayerId && (() => {
+                const player = players.find(p => p.id === selectedPlayerId);
+                if (!player) return null;
+                const playerRating = ratings[selectedPlayerId];
+                return (
+                    <PlayerCommentModal
+                        isOpen={true}
+                        onClose={() => setSelectedPlayerId(null)}
+                        playerId={selectedPlayerId}
+                        matchId={match.id}
+                        playerName={player.name}
+                        playerNumber={player.number}
+                        playerPosition={player.position || 'MF'}
+                        pixelConfig={player.pixel_config}
+                        averageRating={playerRating?.average || null}
+                        totalRatings={playerRating?.count || 0}
+                        user={user}
+                        onAuthAction={handleSignIn}
+                    />
+                );
+            })()}
             {/* Custom Header for this page */}
             <BackHeader
                 title={`AC Milan vs ${match.opponent_name}`}
@@ -526,8 +574,8 @@ export function MatchDetailClient({
                                 <h3 className="font-semibold text-lg flex items-center gap-2">
                                     ⚽ フォーメーション{match.formation ? ` (${match.formation})` : ''}
                                 </h3>
-                                <div className="relative w-full aspect-[4/3] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
-                                     style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)' }}>
+                                <div className="relative w-full aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
+                                    style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)', minHeight: '280px' }}>
                                     {/* Pitch Lines */}
                                     <div className="absolute inset-0">
                                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-white/30 rounded-full" />
@@ -541,8 +589,14 @@ export function MatchDetailClient({
                                     {/* Players on Pitch */}
                                     {(() => {
                                         const lineupStarters = lineups.filter(l => l.is_starter);
+                                        // player_id での重複排除
+                                        const seenIds = new Set<string>();
                                         const pitchPlayers = lineupStarters.length > 0
-                                            ? lineupStarters.map(lu => {
+                                            ? lineupStarters.filter(lu => {
+                                                if (!lu.player_id || seenIds.has(lu.player_id)) return false;
+                                                seenIds.add(lu.player_id);
+                                                return true;
+                                            }).map(lu => {
                                                 const p = players.find((pl: any) => pl.id === lu.player_id);
                                                 return {
                                                     id: lu.player_id || '',
@@ -551,22 +605,25 @@ export function MatchDetailClient({
                                                     pixel_config: p?.pixel_config,
                                                     __role: (lu as any).role || lu.position_role || p?.position || 'MF',
                                                     __side: (lu as any).position_side || 'Center',
+                                                    __positionRow: (lu as any).position_row || undefined,
                                                 };
                                             })
                                             : starters.map(player => ({
                                                 ...player,
                                                 __role: player.position || 'MF',
                                                 __side: 'Center' as string,
+                                                __positionRow: undefined as number | undefined,
                                             }));
 
                                         return pitchPlayers.map(player => {
-                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id);
+                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow);
                                             const playerRating = ratings[player.id];
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 group"
+                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 group cursor-pointer transition-transform hover:scale-110 active:scale-95"
                                                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                                    onClick={() => setSelectedPlayerId(player.id)}
                                                 >
                                                     <div className="relative">
                                                         {player.pixel_config && (

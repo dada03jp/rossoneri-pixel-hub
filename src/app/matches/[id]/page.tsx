@@ -51,10 +51,17 @@ async function getMatchPlayers(matchId: string) {
 
         if (!data) return null;
 
-        return data.map((mp: any) => ({
-            ...mp.player,
-            is_starter: mp.is_starter
-        }));
+        // SQL-level dedup: player_id ベースで重複排除（JOINで重複が発生する場合に対応）
+        const seen = new Map<string, any>();
+        data.forEach((mp: any) => {
+            if (mp.player && !seen.has(mp.player.id)) {
+                seen.set(mp.player.id, {
+                    ...mp.player,
+                    is_starter: mp.is_starter
+                });
+            }
+        });
+        return Array.from(seen.values());
     } catch (e) {
         console.error('Failed to fetch from Supabase:', e);
         return null;
