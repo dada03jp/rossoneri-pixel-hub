@@ -234,7 +234,7 @@ export function PlayerCommentModal({
             user_name: userName,
             content: replyText.trim(),
         };
-        if (parentId) {
+        if (parentId && typeof parentId === 'string' && parentId.trim() !== '') {
             payload.parent_id = parentId;
         }
 
@@ -243,6 +243,11 @@ export function PlayerCommentModal({
             .insert(payload)
             .select()
             .single();
+
+        if (error) {
+            console.error('Supabase Error:', error);
+            alert(`返信の送信に失敗しました: ${error.message}`);
+        }
 
         if (!error && data) {
             const newReply: Reply = {
