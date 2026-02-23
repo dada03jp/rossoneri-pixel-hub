@@ -52,6 +52,8 @@ export interface MatchLineup {
     jersey_number: number;
     is_starter: boolean;
     position_role: 'GK' | 'DF' | 'MF' | 'FW';
+    role: 'GK' | 'DF' | 'MF' | 'FW';
+    position_side: 'Left' | 'Center' | 'Right';
     position_x: number;
     position_y: number;
     minutes_played?: number;

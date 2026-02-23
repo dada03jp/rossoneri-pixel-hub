@@ -196,7 +196,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
 
     // ========== ラインナップ管理 ==========
     const [selectedMatchId, setSelectedMatchId] = useState<string>('');
-    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean }>>({});
+    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string }>>({});
     const [loadingLineup, setLoadingLineup] = useState(false);
 
     const loadLineup = async (matchId: string) => {
@@ -208,12 +208,14 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .select('*')
             .eq('match_id', matchId);
 
-        const newLineup: Record<string, { selected: boolean; isStarter: boolean }> = {};
+        const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string }> = {};
         activePlayers.forEach(p => {
             const existing = data?.find((ml: any) => ml.player_id === p.id);
             newLineup[p.id] = {
                 selected: !!existing,
                 isStarter: existing?.is_starter ?? true,
+                role: existing?.role || existing?.position_role || p.position || 'MF',
+                positionSide: existing?.position_side || 'Center',
             };
         });
         setLineup(newLineup);
@@ -237,7 +239,9 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                     player_name: player?.name || '',
                     jersey_number: player?.number || 0,
                     is_starter: v.isStarter,
-                    position_role: player?.position || 'MF',
+                    position_role: v.role || player?.position || 'MF',
+                    role: v.role || player?.position || 'MF',
+                    position_side: v.positionSide || 'Center',
                 };
             });
 
@@ -650,25 +654,56 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                         checked={lineup[player.id]?.selected || false}
                                                         onChange={e => setLineup(prev => ({
                                                             ...prev,
-                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked }
+                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked, role: prev[player.id]?.role || player.position || 'MF', positionSide: prev[player.id]?.positionSide || 'Center' }
                                                         }))}
                                                         className="w-5 h-5 rounded"
                                                     />
                                                     <span className="w-8 text-xs font-mono text-muted-foreground">{player.number}</span>
                                                     <span className="text-sm flex-1">{player.name}</span>
                                                     {lineup[player.id]?.selected && (
-                                                        <button
-                                                            onClick={() => setLineup(prev => ({
-                                                                ...prev,
-                                                                [player.id]: { ...prev[player.id], isStarter: !prev[player.id].isStarter }
-                                                            }))}
-                                                            className={`text-xs px-3 py-1.5 rounded-lg font-medium active:scale-95 transition-all ${lineup[player.id]?.isStarter
-                                                                ? 'bg-green-100 text-green-700'
-                                                                : 'bg-gray-100 text-gray-600'
-                                                                }`}
-                                                        >
-                                                            {lineup[player.id]?.isStarter ? 'スタメン' : 'サブ'}
-                                                        </button>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => setLineup(prev => ({
+                                                                    ...prev,
+                                                                    [player.id]: { ...prev[player.id], isStarter: !prev[player.id].isStarter }
+                                                                }))}
+                                                                className={`text-xs px-3 py-1.5 rounded-lg font-medium active:scale-95 transition-all ${lineup[player.id]?.isStarter
+                                                                    ? 'bg-green-100 text-green-700'
+                                                                    : 'bg-gray-100 text-gray-600'
+                                                                    }`}
+                                                            >
+                                                                {lineup[player.id]?.isStarter ? 'スタメン' : 'サブ'}
+                                                            </button>
+                                                            {lineup[player.id]?.isStarter && (
+                                                                <>
+                                                                    <select
+                                                                        value={lineup[player.id]?.role || 'MF'}
+                                                                        onChange={e => setLineup(prev => ({
+                                                                            ...prev,
+                                                                            [player.id]: { ...prev[player.id], role: e.target.value }
+                                                                        }))}
+                                                                        className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                                                                    >
+                                                                        <option value="GK">GK</option>
+                                                                        <option value="DF">DF</option>
+                                                                        <option value="MF">MF</option>
+                                                                        <option value="FW">FW</option>
+                                                                    </select>
+                                                                    <select
+                                                                        value={lineup[player.id]?.positionSide || 'Center'}
+                                                                        onChange={e => setLineup(prev => ({
+                                                                            ...prev,
+                                                                            [player.id]: { ...prev[player.id], positionSide: e.target.value }
+                                                                        }))}
+                                                                        className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                                                                    >
+                                                                        <option value="Left">左</option>
+                                                                        <option value="Center">中</option>
+                                                                        <option value="Right">右</option>
+                                                                    </select>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             ))}

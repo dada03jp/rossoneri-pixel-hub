@@ -95,12 +95,17 @@ export function MatchRatingCard({
     return (
         <motion.div
             className={cn(
-                'bg-white rounded-lg p-4 border-2 border-gray-200',
+                'bg-white rounded-lg p-4 border-2 border-black',
                 'transition-all duration-200',
                 className
             )}
-            style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.15)' }}
-            whileHover={{ y: -2 }}
+            style={{
+                boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)',
+                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                backgroundSize: '8px 8px',
+                imageRendering: 'pixelated' as any,
+            }}
+            whileHover={{ y: -3 }}
         >
             {/* Header */}
             <div className="flex items-center gap-3 mb-3">

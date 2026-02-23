@@ -53,18 +53,21 @@ export function PlayerCard({
             <motion.div
                 className={cn(
                     'bg-white rounded-lg p-4 cursor-pointer',
-                    'border-2 border-gray-200 hover:border-primary/50',
+                    'border-2 border-black',
                     'transition-all duration-200',
                     className
                 )}
                 style={{
-                    boxShadow: '4px 4px 0px rgba(0,0,0,0.15)',
+                    boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)',
+                    backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                    backgroundSize: '8px 8px',
+                    imageRendering: 'pixelated' as any,
                 }}
                 whileHover={{
-                    y: -4,
-                    boxShadow: '6px 6px 0px rgba(0,0,0,0.2)',
+                    y: -6,
+                    boxShadow: '6px 8px 0px 0px rgba(0,0,0,1)',
                 }}
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ scale: 0.97 }}
             >
                 {/* Header: Number + Position Badge */}
                 <div className="flex items-center justify-between mb-3">

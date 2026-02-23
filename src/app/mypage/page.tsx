@@ -21,6 +21,10 @@ export default async function MyPage() {
     const { data: statsData } = await (supabase as any)
         .rpc('get_user_stats', { target_user_id: user.id });
 
+    // get_user_highlights RPC
+    const { data: highlightsData } = await (supabase as any)
+        .rpc('get_user_highlights', { target_user_id: user.id });
+
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
             <MyPageClient
@@ -38,6 +42,7 @@ export default async function MyPage() {
                     recent_ratings: [],
                     rated_matches: [],
                 }}
+                highlights={highlightsData || { top: null, worst: null }}
             />
         </div>
     );
