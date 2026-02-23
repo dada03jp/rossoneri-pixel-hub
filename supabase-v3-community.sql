@@ -188,7 +188,7 @@ SELECT json_build_object(
   ),
   'rated_matches', (
     SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json) FROM (
-      SELECT DISTINCT ON (m.id)
+      SELECT
         m.id,
         m.opponent_name,
         m.match_date,
@@ -196,14 +196,14 @@ SELECT json_build_object(
         m.away_score,
         m.is_home,
         m.competition,
-        COUNT(r.id) OVER (PARTITION BY m.id) AS player_count,
-        ROUND(AVG(r.score) OVER (PARTITION BY m.id)::numeric, 1) AS avg_given
+        COUNT(r.id) AS player_count,
+        ROUND(AVG(r.score)::numeric, 1) AS avg_given
       FROM ratings r
       JOIN matches m ON m.id = r.match_id
       WHERE r.user_id = target_user_id
-      ORDER BY m.id, m.match_date DESC
+      GROUP BY m.id, m.opponent_name, m.match_date, m.home_score, m.away_score, m.is_home, m.competition
+      ORDER BY m.match_date DESC
     ) t
-    ORDER BY t.match_date DESC
   )
 );
 $$ LANGUAGE SQL STABLE;
