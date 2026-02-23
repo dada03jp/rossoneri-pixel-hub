@@ -615,7 +615,12 @@ export function MatchDetailClient({
                                                 __positionRow: undefined as number | undefined,
                                             }));
 
-                                        return pitchPlayers.map(player => {
+                                        // Ensure unique players for display on pitch
+                                        const uniquePitchPlayers = pitchPlayers.filter((p, i, self) =>
+                                            self.findIndex(sp => sp.id === p.id) === i
+                                        );
+
+                                        return uniquePitchPlayers.map(player => {
                                             const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow);
                                             const playerRating = ratings[player.id];
                                             return (
@@ -731,30 +736,35 @@ export function MatchDetailClient({
                                     🔄 交代出場の採点
                                 </h3>
                                 <div className="grid gap-4 md:grid-cols-2">
-                                    {substitutes.map(player => {
-                                        const playerRating = ratings[player.id];
-                                        const userRating = userRatings[player.id];
-                                        return (
-                                            <MatchRatingCard
-                                                key={player.id}
-                                                name={player.name}
-                                                number={player.number}
-                                                position={player.position || 'MF'}
-                                                pixelConfig={player.pixel_config}
-                                                averageRating={playerRating?.average || null}
-                                                totalRatings={playerRating?.count || 0}
-                                                initialRating={userRating?.score ?? 6.0}
-                                                initialComment={userRating?.comment}
-                                                isInteractive={true}
-                                                isLoading={loading}
-                                                isGuest={!user}
-                                                onAuthAction={handleSignIn}
-                                                onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
-                                                className="w-full"
-                                                comments={comments[player.id] || []}
-                                            />
+                                    {(() => {
+                                        const uniqueSubstitutes = substitutes.filter((p, i, self) =>
+                                            self.findIndex(sp => sp.id === p.id) === i
                                         );
-                                    })}
+                                        return uniqueSubstitutes.map(player => {
+                                            const playerRating = ratings[player.id];
+                                            const userRating = userRatings[player.id];
+                                            return (
+                                                <MatchRatingCard
+                                                    key={player.id}
+                                                    name={player.name}
+                                                    number={player.number}
+                                                    position={player.position || 'MF'}
+                                                    pixelConfig={player.pixel_config}
+                                                    averageRating={playerRating?.average || null}
+                                                    totalRatings={playerRating?.count || 0}
+                                                    initialRating={userRating?.score ?? 6.0}
+                                                    initialComment={userRating?.comment}
+                                                    isInteractive={true}
+                                                    isLoading={loading}
+                                                    isGuest={!user}
+                                                    onAuthAction={handleSignIn}
+                                                    onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
+                                                    className="w-full"
+                                                    comments={comments[player.id] || []}
+                                                />
+                                            );
+                                        });
+                                    })()}
                                 </div>
                             </div>
                         )}

@@ -66,5 +66,15 @@ export default async function PlayersPage() {
         total_ratings: Number(p.total_ratings) || 0,
     }));
 
-    return <PlayersPageClient players={players} isUsingMockData={false} />;
+    // 重複排除ロジック
+    const uniquePlayers = [];
+    const seenIds = new Set<string>();
+    for (const player of players) {
+        if (!seenIds.has(player.id)) {
+            seenIds.add(player.id);
+            uniquePlayers.push(player);
+        }
+    }
+
+    return <PlayersPageClient players={uniquePlayers} isUsingMockData={false} />;
 }
