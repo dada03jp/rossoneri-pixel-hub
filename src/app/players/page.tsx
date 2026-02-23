@@ -2,79 +2,69 @@ import { createClient } from '@/lib/supabase/server';
 import { PlayersPageClient } from './client';
 import { MOCK_PLAYERS } from '@/lib/mock-data';
 import { PixelConfig } from '@/components/pixel-player';
-import { Player } from '@/types/database';
 
-interface PlayerWithSeasons extends Player {
+export const dynamic = 'force-dynamic';
+
+export interface PlayerWithStats {
+    id: string;
+    name: string;
+    number: number;
+    position: string | null;
+    is_active: boolean;
     pixel_config: PixelConfig;
-    player_seasons: {
-        season_id: string;
-        jersey_number: number;
-        is_active: boolean;
-    }[];
+    avg_rating: number;
+    appearances: number;
+    goals: number;
+    assists: number;
+    yellow_cards: number;
+    red_cards: number;
+    rated_matches: number;
+    total_ratings: number;
 }
 
 export default async function PlayersPage() {
     const supabase = await createClient();
 
-    // Fetch players with their season data
-    const { data: playersData, error } = await supabase
-        .from('players')
-        .select(`
-            *,
-            player_seasons (
-                season_id,
-                jersey_number,
-                is_active
-            )
-        `)
+    // player_season_stats View から取得
+    const { data: statsData, error } = await supabase
+        .from('player_season_stats')
+        .select('*')
         .order('number', { ascending: true });
 
-    // Fetch seasons
-    const { data: seasons } = await supabase
-        .from('seasons')
-        .select('*')
-        .order('start_year', { ascending: false });
+    if (error || !statsData || statsData.length === 0) {
+        console.log('Using mock data for players', error?.message);
 
-    if (error || !playersData || playersData.length === 0) {
-        console.log('Using mock data for players');
-
-        const mockPlayers: PlayerWithSeasons[] = MOCK_PLAYERS.map(p => ({
+        const mockPlayers: PlayerWithStats[] = MOCK_PLAYERS.map(p => ({
             ...p,
-            player_seasons: [{ season_id: 'mock-25-26', jersey_number: p.number, is_active: true }]
+            avg_rating: 0,
+            appearances: 0,
+            goals: 0,
+            assists: 0,
+            yellow_cards: 0,
+            red_cards: 0,
+            rated_matches: 0,
+            total_ratings: 0,
         }));
 
-        return (
-            <PlayersPageClient
-                players={mockPlayers}
-                seasons={[
-                    { id: 'mock-25-26', name: '25-26', start_year: 2025, end_year: 2026, is_current: true },
-                    { id: 'mock-24-25', name: '24-25', start_year: 2024, end_year: 2025, is_current: false }
-                ]}
-                isUsingMockData={true}
-            />
-        );
+        return <PlayersPageClient players={mockPlayers} isUsingMockData={true} />;
     }
 
-    // Transform players data with proper typing
-    const players: PlayerWithSeasons[] = playersData.map((player: Record<string, unknown>) => ({
-        id: player.id as string,
-        name: player.name as string,
-        number: player.number as number,
-        position: player.position as string | null,
-        is_active: (player.is_active as boolean) ?? true,
-        pixel_config: (player.pixel_config || { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' }) as PixelConfig,
-        player_seasons: ((player.player_seasons as Array<{
-            season_id: string;
-            jersey_number: number;
-            is_active: boolean;
-        }>) || [])
+    const players: PlayerWithStats[] = statsData.map((p: Record<string, unknown>) => ({
+        id: p.player_id as string,
+        name: p.name as string,
+        number: (p.number as number) || 0,
+        position: (p.position as string) || null,
+        is_active: (p.is_active as boolean) ?? true,
+        pixel_config: (p.pixel_config || { skinTone: 'light', hairStyle: 'short', hairColor: 'brown' }) as PixelConfig,
+        avg_rating: Number(p.avg_rating) || 0,
+        appearances: Number(p.appearances) || 0,
+        goals: Number(p.goals) || 0,
+        assists: Number(p.assists) || 0,
+        yellow_cards: Number(p.yellow_cards) || 0,
+        red_cards: Number(p.red_cards) || 0,
+        rated_matches: Number(p.rated_matches) || 0,
+        total_ratings: Number(p.total_ratings) || 0,
     }));
 
-    return (
-        <PlayersPageClient
-            players={players}
-            seasons={seasons || []}
-            isUsingMockData={false}
-        />
-    );
+    return <PlayersPageClient players={players} isUsingMockData={false} />;
 }

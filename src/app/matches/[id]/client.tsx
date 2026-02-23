@@ -1,7 +1,7 @@
 'use client';
 
 import { BackHeader } from '@/components/header';
-import { PlayerCard } from '@/components/players/PlayerCard';
+import { MatchRatingCard } from '@/components/players/MatchRatingCard';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
 import { FormationDisplay } from '@/components/formation-display';
@@ -593,7 +593,7 @@ export function MatchDetailClient({
                                             const userRating = userRatings[player.id];
 
                                             return (
-                                                <PlayerCard
+                                                <MatchRatingCard
                                                     key={player.id}
                                                     name={player.name}
                                                     number={player.number}
@@ -608,7 +608,7 @@ export function MatchDetailClient({
                                                     isLoading={loading}
                                                     isGuest={!user}
                                                     onAuthAction={handleSignIn}
-                                                    onSubmit={(score, comment) => handleSubmitRating(player.id, score, comment)}
+                                                    onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
                                                     className="w-full"
                                                     comments={comments[player.id] || []}
                                                 />
@@ -632,7 +632,7 @@ export function MatchDetailClient({
                                         const userRating = userRatings[player.id];
 
                                         return (
-                                            <PlayerCard
+                                            <MatchRatingCard
                                                 key={player.id}
                                                 name={player.name}
                                                 number={player.number}
@@ -647,7 +647,7 @@ export function MatchDetailClient({
                                                 isLoading={loading}
                                                 isGuest={!user}
                                                 onAuthAction={handleSignIn}
-                                                onSubmit={(score, comment) => handleSubmitRating(player.id, score, comment)}
+                                                onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
                                                 className="w-full"
                                                 comments={comments[player.id] || []}
                                             />

@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Menu, X, ArrowLeft } from 'lucide-react';
 import { AuthButton } from './auth-button';
 import { SeasonSelector } from './season-selector';
+import { NotificationBell } from './notification-bell';
 
 export function Header() {
     const [isOpen, setIsOpen] = useState(false);
     const navItems = [
         { name: 'Match Ratings', path: '/' },
         { name: 'Players', path: '/players' },
-        { name: 'Community', path: '/community' },
+        { name: 'My Page', path: '/mypage' },
         { name: 'About', path: '/about' },
     ];
 
@@ -51,8 +52,9 @@ export function Header() {
                     </nav>
 
                     {/* Actions (Season & Auth) */}
-                    <div className="hidden md:flex items-center gap-4">
+                    <div className="hidden md:flex items-center gap-3">
                         <SeasonSelector />
+                        <NotificationBell />
                         <div className="h-4 w-px bg-gray-200" />
                         <AuthButton />
                     </div>
