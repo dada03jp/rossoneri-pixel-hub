@@ -519,19 +519,7 @@ export function MatchDetailClient({
                             </div>
                         )}
 
-                        {/* Formation Display */}
-                        {lineups.length > 0 && match.formation && (
-                            <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
-                                    ⚽ スターティングラインナップ
-                                </h3>
-                                <FormationDisplay
-                                    lineup={lineups}
-                                    formation={match.formation}
-                                    isHome={match.is_home ?? true}
-                                />
-                            </div>
-                        )}
+
 
                         {/* ======= NEW: Two-column layout ======= */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -556,17 +544,33 @@ export function MatchDetailClient({
 
                                     {/* Players on Pitch */}
                                     {(() => {
-                                        // Pre-compute roles/sides and attach
-                                        const enriched = starters.map(player => {
-                                            const lu = lineups.find((l: any) => l.player_id === player.id);
-                                            return {
-                                                ...player,
-                                                __role: lu?.role || lu?.position_role || player.position || 'MF',
-                                                __side: (lu as any)?.position_side || 'Center',
-                                            };
-                                        });
-                                        return enriched.map(player => {
-                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', enriched, player.id);
+                                        // Use lineups as primary source (has role/position_side)
+                                        // Fall back to starters from match_players
+                                        const lineupStarters = lineups.filter(l => l.is_starter);
+                                        const pitchPlayers = lineupStarters.length > 0
+                                            ? lineupStarters.map(lu => {
+                                                const p = players.find((pl: any) => pl.id === lu.player_id);
+                                                return {
+                                                    id: lu.player_id || '',
+                                                    name: lu.player_name || p?.name || '',
+                                                    number: lu.jersey_number || p?.number || 0,
+                                                    position: p?.position || lu.position_role || 'MF',
+                                                    pixel_config: p?.pixel_config,
+                                                    __role: lu.role || lu.position_role || p?.position || 'MF',
+                                                    __side: (lu as any).position_side || 'Center',
+                                                };
+                                            })
+                                            : starters.map(player => {
+                                                const lu = lineups.find((l: any) => l.player_id === player.id);
+                                                return {
+                                                    ...player,
+                                                    __role: lu?.role || lu?.position_role || player.position || 'MF',
+                                                    __side: (lu as any)?.position_side || 'Center',
+                                                };
+                                            });
+
+                                        return pitchPlayers.map(player => {
+                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id);
                                             const playerRating = ratings[player.id];
                                             const isSelected = selectedPlayerId === player.id;
                                             return (
@@ -628,38 +632,58 @@ export function MatchDetailClient({
 
                             {/* RIGHT: Substitutes */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
-                                    🔄 交代出場 ({substitutes.length}人)
-                                </h3>
-                                <div className="space-y-2">
-                                    {substitutes.map(player => {
-                                        const playerRating = ratings[player.id];
-                                        const userRating = userRatings[player.id];
-                                        return (
-                                            <MatchRatingCard
-                                                key={player.id}
-                                                name={player.name}
-                                                number={player.number}
-                                                position={player.position || 'MF'}
-                                                pixelConfig={player.pixel_config}
-                                                averageRating={playerRating?.average || null}
-                                                totalRatings={playerRating?.count || 0}
-                                                initialRating={userRating?.score ?? 6.0}
-                                                initialComment={userRating?.comment}
-                                                isInteractive={true}
-                                                isLoading={loading}
-                                                isGuest={!user}
-                                                onAuthAction={handleSignIn}
-                                                onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
-                                                className="w-full"
-                                                comments={comments[player.id] || []}
-                                            />
-                                        );
-                                    })}
-                                    {substitutes.length === 0 && (
-                                        <p className="text-sm text-muted-foreground text-center py-4">交代出場なし</p>
-                                    )}
-                                </div>
+                                {(() => {
+                                    // lineups から交代出場を取得（lineups優先）
+                                    const lineupSubs = lineups.filter(l => !l.is_starter);
+                                    const subPlayers = lineupSubs.length > 0
+                                        ? lineupSubs.map(lu => {
+                                            const p = players.find((pl: any) => pl.id === lu.player_id);
+                                            return {
+                                                id: lu.player_id || '',
+                                                name: lu.player_name || p?.name || '',
+                                                number: lu.jersey_number || p?.number || 0,
+                                                position: p?.position || lu.position_role || 'MF',
+                                                pixel_config: p?.pixel_config,
+                                            };
+                                        })
+                                        : substitutes;
+                                    return (
+                                        <>
+                                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                                🔄 交代出場 ({subPlayers.length}人)
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {subPlayers.map(player => {
+                                                    const playerRating = ratings[player.id];
+                                                    const userRating = userRatings[player.id];
+                                                    return (
+                                                        <MatchRatingCard
+                                                            key={player.id}
+                                                            name={player.name}
+                                                            number={player.number}
+                                                            position={player.position || 'MF'}
+                                                            pixelConfig={player.pixel_config as any}
+                                                            averageRating={playerRating?.average || null}
+                                                            totalRatings={playerRating?.count || 0}
+                                                            initialRating={userRating?.score ?? 6.0}
+                                                            initialComment={userRating?.comment}
+                                                            isInteractive={true}
+                                                            isLoading={loading}
+                                                            isGuest={!user}
+                                                            onAuthAction={handleSignIn}
+                                                            onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
+                                                            className="w-full"
+                                                            comments={comments[player.id] || []}
+                                                        />
+                                                    );
+                                                })}
+                                                {subPlayers.length === 0 && (
+                                                    <p className="text-sm text-muted-foreground text-center py-4">交代出場なし</p>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         </div>
 
@@ -681,9 +705,8 @@ export function MatchDetailClient({
                             この試合はまだ行われていません。試合終了後に選手の採点が可能になります。
                         </p>
                     </div>
-                )
-                }
-            </div >
-        </div >
+                )}
+            </div>
+        </div>
     );
 }
