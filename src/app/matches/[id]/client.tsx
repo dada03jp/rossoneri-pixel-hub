@@ -628,7 +628,7 @@ export function MatchDetailClient({
                                                     <div className="relative">
                                                         {player.pixel_config && (
                                                             <div style={{ imageRendering: 'pixelated' as any }}>
-                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={36} />
+                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} />
                                                             </div>
                                                         )}
                                                         {playerRating && (
@@ -659,7 +659,7 @@ export function MatchDetailClient({
                                             <div key={player.id} className="flex items-center gap-3 py-1">
                                                 {player.pixel_config && (
                                                     <div style={{ imageRendering: 'pixelated' as any }}>
-                                                        <PixelPlayer config={player.pixel_config} number={player.number} size={32} />
+                                                        <PixelPlayer config={player.pixel_config} number={player.number} size={40} />
                                                     </div>
                                                 )}
                                                 <div className="flex-1 min-w-0">

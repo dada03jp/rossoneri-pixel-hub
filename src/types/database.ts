@@ -7,6 +7,7 @@ export interface Profile {
     is_premium: boolean;
     plan_type: 'free' | 'premium';
     stripe_customer_id?: string | null;
+    role?: 'user' | 'admin';
     updated_at: string | null;
 }
 
@@ -105,6 +106,7 @@ export interface Rating {
     score: number;
     comment: string | null;
     user_name: string | null;
+    is_deleted?: boolean;
     created_at: string;
 }
 
@@ -123,6 +125,8 @@ export interface CommentReply {
     user_id: string;
     user_name?: string | null;
     content: string;
+    parent_id?: string | null;
+    is_deleted?: boolean;
     created_at: string;
 }
 
@@ -134,6 +138,16 @@ export interface Notification {
     rating_id: string | null;
     reply_id: string | null;
     is_read: boolean;
+    created_at: string;
+}
+
+export interface Report {
+    id: string;
+    target_type: 'rating' | 'reply';
+    target_id: string;
+    reporter_id: string;
+    reason: string;
+    status: 'pending' | 'reviewed' | 'dismissed';
     created_at: string;
 }
 

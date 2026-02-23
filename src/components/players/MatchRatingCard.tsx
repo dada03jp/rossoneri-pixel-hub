@@ -113,7 +113,7 @@ export function MatchRatingCard({
                     animate={{ y: [0, -3, 0] }}
                     transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                 >
-                    <PixelPlayer config={pixelConfig} number={number} size={40} />
+                    <PixelPlayer config={pixelConfig} number={number} size={64} />
                 </motion.div>
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">{name}</p>
