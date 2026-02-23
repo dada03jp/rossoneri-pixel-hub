@@ -198,6 +198,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
     const [selectedMatchId, setSelectedMatchId] = useState<string>('');
     const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string }>>({});
     const [loadingLineup, setLoadingLineup] = useState(false);
+    const [selectedFormation, setSelectedFormation] = useState('4-3-3');
 
     const loadLineup = async (matchId: string) => {
         setSelectedMatchId(matchId);
@@ -220,12 +221,24 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
         });
         setLineup(newLineup);
         setLoadingLineup(false);
+
+        // 試合のフォーメーションを読み込み
+        const match = matches.find(m => m.id === matchId);
+        if (match?.formation) {
+            setSelectedFormation(match.formation);
+        } else {
+            setSelectedFormation('4-3-3');
+        }
     };
 
     const saveLineup = async () => {
         if (!selectedMatchId) return;
         setSaving(true);
         const supabase = createClient();
+
+        // フォーメーションを試合テーブルに保存
+        await supabase.from('matches').update({ formation: selectedFormation } as any).eq('id', selectedMatchId);
+        setMatches(prev => prev.map(m => m.id === selectedMatchId ? { ...m, formation: selectedFormation } : m));
 
         await supabase.from('match_lineups').delete().eq('match_id', selectedMatchId);
 
@@ -640,6 +653,23 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
 
                     {selectedMatchId && !loadingLineup && (
                         <>
+                            {/* フォーメーション選択 */}
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-bold text-muted-foreground">フォーメーション:</span>
+                                <select
+                                    value={selectedFormation}
+                                    onChange={e => setSelectedFormation(e.target.value)}
+                                    className="px-3 py-2 border rounded-xl text-sm font-mono"
+                                >
+                                    <option value="4-3-3">4-3-3</option>
+                                    <option value="4-2-3-1">4-2-3-1</option>
+                                    <option value="4-4-2">4-4-2</option>
+                                    <option value="3-5-2">3-5-2</option>
+                                    <option value="3-4-3">3-4-3</option>
+                                    <option value="4-1-4-1">4-1-4-1</option>
+                                    <option value="4-3-1-2">4-3-1-2</option>
+                                </select>
+                            </div>
                             <div className="space-y-2">
                                 {['GK', 'DF', 'MF', 'FW'].map(pos => {
                                     const posPlayers = activePlayers.filter(p => p.position === pos);

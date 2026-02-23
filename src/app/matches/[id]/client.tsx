@@ -24,6 +24,42 @@ interface MatchDetailClientProps {
     lineups: MatchLineup[];
 }
 
+// フォーメーション座標計算ヘルパー
+function getFormationPosition(
+    role: string,
+    side: string,
+    formation: string,
+    allStarters: any[],
+    playerId: string
+): { x: number; y: number } {
+    // Y座標（行: 上がFW、下がGK）
+    const yMap: Record<string, number> = { GK: 88, DF: 70, MF: 48, FW: 22 };
+    const y = yMap[role] ?? 50;
+
+    // 同じroleの選手を抽出して左右に分散
+    const sameRole = allStarters.filter(p => {
+        const pr = (p as any).__role || role;
+        return pr === role;
+    });
+
+    // side-based X
+    if (side === 'Left') return { x: 18, y };
+    if (side === 'Right') return { x: 82, y };
+
+    // Center: 同ロールのセンター選手の数に応じて分散
+    const centers = allStarters.filter(p => {
+        const pSide = (p as any).__side || 'Center';
+        const pRole = (p as any).__role || role;
+        return pRole === role && pSide === 'Center';
+    });
+    const idx = centers.findIndex(p => p.id === playerId);
+    const count = Math.max(centers.length, 1);
+    if (count === 1) return { x: 50, y };
+    const spacing = 28;
+    const startX = 50 - ((count - 1) * spacing) / 2;
+    return { x: startX + idx * spacing, y };
+}
+
 export function MatchDetailClient({
     match,
     players,
@@ -41,6 +77,7 @@ export function MatchDetailClient({
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
     // Get current user and their existing ratings
     useEffect(() => {
@@ -496,141 +533,108 @@ export function MatchDetailClient({
                             </div>
                         )}
 
-                        {/* Player Lineup Cards - Starters */}
-                        {(lineups.length === 0 || !match.formation) && starters.length > 0 && (
-                            <div className="space-y-3">
-                                <h3 className="font-semibold text-lg">⚽ スターティングメンバー ({starters.length}人)</h3>
-                                <div className="bg-gradient-to-b from-green-900/20 to-green-800/10 rounded-xl p-6 border border-green-800/20">
-                                    <div className="flex flex-wrap justify-center gap-3">
-                                        {starters.map(player => {
-                                            const playerRating = ratings[player.id];
-                                            return (
-                                                <div
-                                                    key={player.id}
-                                                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                                                    title={`${player.name} - ${playerRating?.average.toFixed(1) || 'N/A'}`}
-                                                >
-                                                    {player.pixel_config && (
-                                                        <PixelPlayer
-                                                            config={player.pixel_config}
-                                                            number={player.number}
-                                                            size={48}
-                                                        />
-                                                    )}
-                                                    <span className="text-xs text-center font-medium max-w-[60px] truncate">
-                                                        {player.name.split(' ').pop()}
-                                                    </span>
-                                                    {playerRating && (
-                                                        <span className="text-xs font-bold text-primary">
-                                                            {playerRating.average.toFixed(1)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Player Lineup Cards - Substitutes */}
-                        {(lineups.length === 0 || !match.formation) && substitutes.length > 0 && (
-                            <div className="space-y-3">
-                                <h3 className="font-semibold text-lg">🔄 交代出場 ({substitutes.length}人)</h3>
-                                <div className="bg-gradient-to-b from-blue-900/20 to-blue-800/10 rounded-xl p-6 border border-blue-800/20">
-                                    <div className="flex flex-wrap justify-center gap-3">
-                                        {substitutes.map(player => {
-                                            const playerRating = ratings[player.id];
-                                            return (
-                                                <div
-                                                    key={player.id}
-                                                    className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                                                    title={`${player.name} - ${playerRating?.average.toFixed(1) || 'N/A'}`}
-                                                >
-                                                    {player.pixel_config && (
-                                                        <PixelPlayer
-                                                            config={player.pixel_config}
-                                                            number={player.number}
-                                                            size={48}
-                                                        />
-                                                    )}
-                                                    <span className="text-xs text-center font-medium max-w-[60px] truncate">
-                                                        {player.name.split(' ').pop()}
-                                                    </span>
-                                                    {playerRating && (
-                                                        <span className="text-xs font-bold text-primary">
-                                                            {playerRating.average.toFixed(1)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Rating Cards by Position (Starters) */}
-                        {Object.entries(playersByPosition).map(([position, posPlayers]) => {
-                            if (posPlayers.length === 0) return null;
-
-                            const positionLabels: Record<string, string> = {
-                                GK: 'ゴールキーパー',
-                                DF: 'ディフェンダー',
-                                MF: 'ミッドフィールダー',
-                                FW: 'フォワード',
-                            };
-
-                            return (
-                                <div key={position} className="space-y-3">
-                                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-primary" />
-                                        {positionLabels[position]}
-                                    </h3>
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        {posPlayers.map(player => {
-                                            const playerRating = ratings[player.id];
-                                            const userRating = userRatings[player.id];
-
-                                            return (
-                                                <MatchRatingCard
-                                                    key={player.id}
-                                                    name={player.name}
-                                                    number={player.number}
-                                                    position={player.position || 'MF'}
-                                                    pixelConfig={player.pixel_config}
-                                                    averageRating={playerRating?.average || null}
-                                                    totalRatings={playerRating?.count || 0}
-                                                    recentRatings={[]}
-                                                    initialRating={userRating?.score ?? 6.0}
-                                                    initialComment={userRating?.comment}
-                                                    isInteractive={true}
-                                                    isLoading={loading}
-                                                    isGuest={!user}
-                                                    onAuthAction={handleSignIn}
-                                                    onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
-                                                    className="w-full"
-                                                    comments={comments[player.id] || []}
-                                                />
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {/* Rating Cards for Substitutes */}
-                        {substitutes.length > 0 && (
-                            <div className="space-y-3">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                    🔄 交代出場
+                        {/* ======= NEW: Two-column layout ======= */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* LEFT: Formation Pitch */}
+                            <div className="lg:col-span-2 space-y-4">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    🎯 選手採点{match.formation ? ` (${match.formation})` : ''}
                                 </h3>
-                                <div className="grid gap-4 md:grid-cols-2">
+
+                                {/* Interactive Pitch */}
+                                <div className="relative w-full aspect-[4/3] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
+                                    style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)' }}>
+                                    {/* Pitch Lines */}
+                                    <div className="absolute inset-0">
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-white/30 rounded-full" />
+                                        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30" />
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-12 border-2 border-t-0 border-white/30" />
+                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-12 border-2 border-b-0 border-white/30" />
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-20 border-2 border-t-0 border-white/30" />
+                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-20 border-2 border-b-0 border-white/30" />
+                                    </div>
+
+                                    {/* Players on Pitch */}
+                                    {(() => {
+                                        // Pre-compute roles/sides and attach
+                                        const enriched = starters.map(player => {
+                                            const lu = lineups.find((l: any) => l.player_id === player.id);
+                                            return {
+                                                ...player,
+                                                __role: lu?.role || lu?.position_role || player.position || 'MF',
+                                                __side: (lu as any)?.position_side || 'Center',
+                                            };
+                                        });
+                                        return enriched.map(player => {
+                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', enriched, player.id);
+                                            const playerRating = ratings[player.id];
+                                            const isSelected = selectedPlayerId === player.id;
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 cursor-pointer group transition-transform ${isSelected ? 'scale-110 z-10' : ''}`}
+                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                                    onClick={() => setSelectedPlayerId(isSelected ? null : player.id)}
+                                                >
+                                                    <div className="relative">
+                                                        {player.pixel_config && (
+                                                            <div style={{ imageRendering: 'pixelated' as any }}>
+                                                                <PixelPlayer config={player.pixel_config} number={player.number} size={36} />
+                                                            </div>
+                                                        )}
+                                                        {playerRating && (
+                                                            <span className="absolute -bottom-1 -right-1 bg-white text-[10px] font-bold px-1 rounded border border-black">
+                                                                {playerRating.average.toFixed(1)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-[10px] font-medium px-1 py-0.5 rounded whitespace-nowrap transition-colors ${isSelected ? 'bg-primary text-white' : 'text-white bg-black/60 group-hover:bg-primary'}`}>
+                                                        {player.name.split(' ').pop()}
+                                                    </span>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+
+                                {/* Selected Player Rating Card */}
+                                {selectedPlayerId && (() => {
+                                    const player = starters.find(p => p.id === selectedPlayerId) || substitutes.find(p => p.id === selectedPlayerId);
+                                    if (!player) return null;
+                                    const playerRating = ratings[player.id];
+                                    const userRating = userRatings[player.id];
+                                    return (
+                                        <MatchRatingCard
+                                            key={player.id}
+                                            name={player.name}
+                                            number={player.number}
+                                            position={player.position || 'MF'}
+                                            pixelConfig={player.pixel_config}
+                                            averageRating={playerRating?.average || null}
+                                            totalRatings={playerRating?.count || 0}
+                                            initialRating={userRating?.score ?? 6.0}
+                                            initialComment={userRating?.comment}
+                                            isInteractive={true}
+                                            isLoading={loading}
+                                            isGuest={!user}
+                                            onAuthAction={handleSignIn}
+                                            onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
+                                            className="w-full"
+                                            comments={comments[player.id] || []}
+                                        />
+                                    );
+                                })()}
+                            </div>
+
+                            {/* RIGHT: Substitutes */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    🔄 交代出場 ({substitutes.length}人)
+                                </h3>
+                                <div className="space-y-2">
                                     {substitutes.map(player => {
                                         const playerRating = ratings[player.id];
                                         const userRating = userRatings[player.id];
-
                                         return (
                                             <MatchRatingCard
                                                 key={player.id}
@@ -640,7 +644,6 @@ export function MatchDetailClient({
                                                 pixelConfig={player.pixel_config}
                                                 averageRating={playerRating?.average || null}
                                                 totalRatings={playerRating?.count || 0}
-                                                recentRatings={[]}
                                                 initialRating={userRating?.score ?? 6.0}
                                                 initialComment={userRating?.comment}
                                                 isInteractive={true}
@@ -653,9 +656,12 @@ export function MatchDetailClient({
                                             />
                                         );
                                     })}
+                                    {substitutes.length === 0 && (
+                                        <p className="text-sm text-muted-foreground text-center py-4">交代出場なし</p>
+                                    )}
                                 </div>
                             </div>
-                        )}
+                        </div>
 
                         {/* Ranking Card */}
                         {Object.keys(ratings).length > 0 && (
@@ -675,8 +681,9 @@ export function MatchDetailClient({
                             この試合はまだ行われていません。試合終了後に選手の採点が可能になります。
                         </p>
                     </div>
-                )}
-            </div>
-        </div>
+                )
+                }
+            </div >
+        </div >
     );
 }
