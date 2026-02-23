@@ -252,18 +252,23 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
 
         await supabase.from('match_lineups').delete().eq('match_id', selectedMatchId);
 
+        const detailedToLegacy: Record<string, string> = {
+            GK: 'GK', CB: 'DF', WB: 'DF', DM: 'MF', CM: 'MF', AM: 'MF', ST: 'FW',
+            DF: 'DF', MF: 'MF', FW: 'FW',
+        };
         const entries = Object.entries(lineup)
             .filter(([_, v]) => v.selected)
             .map(([playerId, v]) => {
                 const player = activePlayers.find(p => p.id === playerId);
+                const detailedRole = v.role || player?.position || 'MF';
                 return {
                     match_id: selectedMatchId,
                     player_id: playerId,
                     player_name: player?.name || '',
                     jersey_number: player?.number || 0,
                     is_starter: v.isStarter,
-                    position_role: v.role || player?.position || 'MF',
-                    role: v.role || player?.position || 'MF',
+                    position_role: detailedToLegacy[detailedRole] || 'MF',
+                    role: detailedRole,
                     position_side: v.positionSide || 'Center',
                     position_row: v.positionRow || 3,
                 };
