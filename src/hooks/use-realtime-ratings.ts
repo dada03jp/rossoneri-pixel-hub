@@ -130,6 +130,7 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
     }, [matchId]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchRatingsAndComments();
 
         const supabase = createClient();

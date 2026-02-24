@@ -67,9 +67,9 @@ export function PlayerCommentModal({
     // ── データ取得 ──
     useEffect(() => {
         if (!isOpen) return;
-        setLoading(true);
 
         const fetchComments = async () => {
+            setLoading(true);
             const supabase = createClient();
 
             // Admin チェック
@@ -169,7 +169,7 @@ export function PlayerCommentModal({
             setComments(prev => prev.map(c => c.id === ratingId
                 ? { ...c, likes_count: c.likes_count - 1, user_has_liked: false } : c));
         } else {
-            await supabase.from('comment_likes').insert({ rating_id: ratingId, user_id: user.id } as any);
+            await supabase.from('comment_likes').insert({ rating_id: ratingId, user_id: user.id });
             setComments(prev => prev.map(c => c.id === ratingId
                 ? { ...c, likes_count: c.likes_count + 1, user_has_liked: true } : c));
         }
@@ -200,7 +200,7 @@ export function PlayerCommentModal({
         const supabase = createClient();
         const userName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'ミラニスタ';
 
-        const payload: any = {
+        const payload: Record<string, any> = {
             rating_id: replyingToRatingId,
             user_id: user.id,
             user_name: userName,
@@ -242,10 +242,10 @@ export function PlayerCommentModal({
         const supabase = createClient();
 
         if (type === 'rating') {
-            await supabase.from('ratings').update({ is_deleted: true } as any).eq('id', id);
+            await supabase.from('ratings').update({ is_deleted: true }).eq('id', id);
             setComments(prev => prev.map(c => c.id === id ? { ...c, is_deleted: true } : c));
         } else {
-            await supabase.from('comment_replies').update({ is_deleted: true } as any).eq('id', id);
+            await supabase.from('comment_replies').update({ is_deleted: true }).eq('id', id);
             setComments(prev => prev.map(c => ({
                 ...c,
                 replies: c.replies.map(r => r.id === id ? { ...r, is_deleted: true } : r),
@@ -263,7 +263,7 @@ export function PlayerCommentModal({
             target_id: reportTarget.id,
             reporter_id: user.id,
             reason: reportReason,
-        } as any);
+        });
         setIsReporting(false);
         setReportTarget(null);
         alert('報告を受信しました。ご協力ありがとうございます。');
@@ -322,7 +322,7 @@ export function PlayerCommentModal({
                 {/* ── Header ── */}
                 <div className="flex items-center gap-3 p-4 border-b-2 border-black bg-gradient-to-r from-red-600 to-red-800 text-white">
                     {pixelConfig && (
-                        <div style={{ imageRendering: 'pixelated' as any }} className="animate-bounce">
+                        <div style={{ imageRendering: 'pixelated' }} className="animate-bounce">
                             <PixelPlayer config={pixelConfig} number={playerNumber} size={64} />
                         </div>
                     )}
