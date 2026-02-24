@@ -18,7 +18,9 @@ const POSITION_LABELS: Record<string, string> = {
     'FW': 'フォワード'
 };
 
-export function PlayersPageClient({ players, isUsingMockData }: PlayersPageClientProps) {
+export function PlayersPageClient({ players: initialPlayers, isUsingMockData }: PlayersPageClientProps) {
+    // 選手重複の完全な排除
+    const players = Array.from(new Map(initialPlayers.map(p => [p.id, p])).values());
     // Group players by position
     const playersByPosition = useMemo(() => {
         const grouped: Record<string, PlayerWithStats[]> = {};

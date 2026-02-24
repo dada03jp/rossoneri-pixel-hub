@@ -80,12 +80,14 @@ function getFormationPosition(
 
 export function MatchDetailClient({
     match,
-    players,
+    players: initialPlayers,
     ratings: initialRatings,
     isUsingMockData,
     events,
     lineups
 }: MatchDetailClientProps) {
+    // 選手重複の完全な排除
+    const players = Array.from(new Map(initialPlayers.map(p => [p.id, p])).values());
     // リアルタイム採点更新
     const { ratings, comments, isConnected } = useRealtimeRatings({
         matchId: match.id,
