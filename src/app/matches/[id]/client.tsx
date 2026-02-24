@@ -86,8 +86,8 @@ export function MatchDetailClient({
     events,
     lineups
 }: MatchDetailClientProps) {
-    // 選手重複の完全な排除
-    const players = Array.from(new Map(initialPlayers.map(p => [p.id, p])).values());
+    // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
+    const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
     // リアルタイム採点更新
     const { ratings, comments, isConnected } = useRealtimeRatings({
         matchId: match.id,

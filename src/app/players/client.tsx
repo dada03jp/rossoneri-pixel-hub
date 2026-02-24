@@ -19,8 +19,8 @@ const POSITION_LABELS: Record<string, string> = {
 };
 
 export function PlayersPageClient({ players: initialPlayers, isUsingMockData }: PlayersPageClientProps) {
-    // 選手重複の完全な排除
-    const players = Array.from(new Map(initialPlayers.map(p => [p.id, p])).values());
+    // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
+    const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
     // Group players by position
     const playersByPosition = useMemo(() => {
         const grouped: Record<string, PlayerWithStats[]> = {};
