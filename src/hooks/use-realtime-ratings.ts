@@ -60,7 +60,16 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
     const [isConnected, setIsConnected] = useState(false);
 
     // 内部スコアストア (ref で保持し、delta計算の元データとする)
-    const scoreStoreRef = useRef<ScoreStore>({});
+    // initialRatings から仮の ScoreStore を生成（fetchAll で実データに上書きされる）
+    const initialStore: ScoreStore = {};
+    for (const [playerId, data] of Object.entries(initialRatings)) {
+        const map = new Map<string, number>();
+        for (let i = 0; i < data.count; i++) {
+            map.set(`__init_${playerId}_${i}`, data.average);
+        }
+        initialStore[playerId] = map;
+    }
+    const scoreStoreRef = useRef<ScoreStore>(initialStore);
     const isMounted = useRef(true);
 
     // ======== 全件取得（初期ロード + バックグラウンド同期） ========
