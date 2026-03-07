@@ -6,7 +6,7 @@ import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
 import { PlayerCommentModal } from '@/components/PlayerCommentModal';
 import { EventTimeline } from '@/components/event-timeline';
-import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff } from 'lucide-react';
+import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff, Share2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Match, Player, MatchEvent, MatchLineup } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
@@ -15,6 +15,7 @@ import { User } from '@supabase/supabase-js';
 import { useRealtimeRatings } from '@/hooks/use-realtime-ratings';
 import { LoginModal } from '@/components/auth/login-modal';
 import { useTeam } from '@/contexts/team-context';
+import { RatingShareCard } from '@/components/rating-share-card';
 
 interface MatchDetailClientProps {
     match: Match;
@@ -110,6 +111,7 @@ export function MatchDetailClient({
     const [loading, setLoading] = useState(true);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+    const [showShareCard, setShowShareCard] = useState(false);
 
     // チーム情報
     const { team: teamConfig } = useTeam();
@@ -797,7 +799,17 @@ export function MatchDetailClient({
                             </div>
                         )}
 
-                        {/* Ranking Card */}
+                        {/* Share & Ranking */}
+                        {Object.keys(ratings).length > 0 && Object.keys(userRatings).length > 0 && (
+                            <button
+                                onClick={() => setShowShareCard(true)}
+                                className="w-full flex items-center justify-center gap-2 bg-black text-white font-bold py-3 rounded-lg border-2 border-black text-sm hover:bg-gray-900 transition-colors mb-4"
+                                style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.3)', fontFamily: 'monospace' }}
+                            >
+                                <Share2 className="w-4 h-4" />
+                                📸 採点カードを画像で保存
+                            </button>
+                        )}
                         {Object.keys(ratings).length > 0 && (
                             <RankingCard
                                 title="今試合の評価ランキング"
@@ -817,6 +829,27 @@ export function MatchDetailClient({
                     </div>
                 )}
             </div>
+
+            {/* Share Card Modal */}
+            <RatingShareCard
+                show={showShareCard}
+                onClose={() => setShowShareCard(false)}
+                matchTitle={`${teamConfig.name} vs ${match.opponent_name}`}
+                matchDate={match.match_date}
+                competition={match.competition || 'Match'}
+                resultText={match.home_score !== null && match.away_score !== null
+                    ? `${match.home_score} - ${match.away_score}`
+                    : 'vs'}
+                playerRatings={Object.entries(userRatings).map(([pid, r]) => {
+                    const p = players.find(pl => pl.id === pid);
+                    return {
+                        name: p?.name || 'Unknown',
+                        number: p?.number || 0,
+                        position: p?.position || 'MF',
+                        score: r.score,
+                    };
+                }).sort((a, b) => b.score - a.score)}
+            />
         </div>
     );
 }

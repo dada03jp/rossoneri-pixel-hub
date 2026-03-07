@@ -8,6 +8,8 @@ import { Star, Send } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PixelBurst, RatingSuccessPopup, AnimatedCounter } from '@/components/pixel-effects';
+import { useTeam } from '@/contexts/team-context';
 
 interface ProcessedComment {
     id: string;
@@ -75,6 +77,9 @@ export function MatchRatingCard({
     const [comment, setComment] = useState(initialComment);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasSubmitted, setHasSubmitted] = useState(false);
+    const [showBurst, setShowBurst] = useState(false);
+    const [showPopup, setShowPopup] = useState(false);
+    const { team: teamConfig } = useTeam();
 
     const handleSubmit = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -84,7 +89,11 @@ export function MatchRatingCard({
         try {
             await onSubmit(sliderValue, comment);
             setHasSubmitted(true);
+            setShowBurst(true);
+            setShowPopup(true);
             setComment('');
+            // ポップアップ自動消去
+            setTimeout(() => setShowPopup(false), 1500);
         } catch (error) {
             console.error('Submit failed', error);
         } finally {
@@ -96,7 +105,7 @@ export function MatchRatingCard({
         <motion.div
             className={cn(
                 'bg-white rounded-lg p-4 border-2 border-black',
-                'transition-all duration-200',
+                'transition-all duration-200 relative overflow-hidden',
                 className
             )}
             style={{
@@ -121,13 +130,24 @@ export function MatchRatingCard({
                 </div>
                 {averageRating !== null && (
                     <div className="text-right">
-                        <span className={`text-xl font-bold font-mono ${getScoreColor(averageRating)}`}>
-                            {averageRating.toFixed(1)}
-                        </span>
+                        <AnimatedCounter
+                            value={averageRating}
+                            className={`text-xl ${getScoreColor(averageRating)}`}
+                        />
                         <span className="text-[10px] text-gray-400 block">{totalRatings}件</span>
                     </div>
                 )}
             </div>
+
+            {/* Pixel Burst Effect */}
+            <PixelBurst
+                trigger={showBurst}
+                colors={[teamConfig.colors.primary, teamConfig.colors.accent]}
+                originX={0}
+                originY={0}
+                onComplete={() => setShowBurst(false)}
+            />
+            <RatingSuccessPopup show={showPopup} score={sliderValue} />
 
             {/* Rating Slider */}
             {isInteractive && (
