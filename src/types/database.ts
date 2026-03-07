@@ -23,6 +23,7 @@ export type MatchStatus = 'upcoming' | 'live' | 'finished';
 
 export interface Match {
     id: string;
+    team_id: string;
     opponent_name: string;
     match_date: string;
     home_score: number | null;
@@ -69,6 +70,7 @@ export interface MatchLineup {
 
 export interface Player {
     id: string;
+    team_id: string;
     name: string;
     number: number;
     position: string | null;
@@ -176,6 +178,7 @@ export interface PlayerSeasonStats {
     position: string | null;
     is_active: boolean;
     pixel_config: Player['pixel_config'];
+    team_id: string;
     avg_rating: number;
     rated_matches: number;
     total_ratings: number;

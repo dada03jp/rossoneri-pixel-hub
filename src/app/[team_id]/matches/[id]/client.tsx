@@ -18,11 +18,22 @@ import { useTeam } from '@/contexts/team-context';
 
 interface MatchDetailClientProps {
     match: Match;
-    players: (Player & { pixel_config: PixelConfig })[];
+    players: (Player & { pixel_config: PixelConfig; is_starter?: boolean })[];
     ratings: Record<string, { average: number; count: number }>;
     isUsingMockData: boolean;
     events: MatchEvent[];
     lineups: MatchLineup[];
+}
+
+/** フォーメーション図上の選手表現 */
+interface PitchPlayer {
+    id: string;
+    name: string;
+    number: number;
+    pixel_config?: PixelConfig | null;
+    __role: string;
+    __side: string;
+    __positionRow?: number;
 }
 
 // フォーメーション座標計算ヘルパー（position_row + role + side 対応）
@@ -30,7 +41,7 @@ function getFormationPosition(
     role: string,
     side: string,
     formation: string,
-    allStarters: any[],
+    allStarters: PitchPlayer[],
     playerId: string,
     positionRow?: number
 ): { x: number; y: number } {
@@ -51,7 +62,7 @@ function getFormationPosition(
     // --- X座標: side ベース + 同 row 内での分散 ---
     // 同じ row の選手を抽出
     const sameRow = allStarters.filter(p => {
-        const pRow = (p as any).__positionRow || roleToRow[(p as any).__role] || 3;
+        const pRow = p.__positionRow || roleToRow[p.__role] || 3;
         return pRow === effectiveRow;
     });
 
@@ -67,7 +78,7 @@ function getFormationPosition(
 
     // Center: 同 row・同 side の選手をカウントして等間隔に配置
     const centersInRow = sameRow.filter(p => {
-        const pSide = (p as any).__side || 'Center';
+        const pSide = p.__side || 'Center';
         return pSide === 'Center';
     });
     const idx = centersInRow.findIndex(p => p.id === playerId);
@@ -90,7 +101,7 @@ export function MatchDetailClient({
     // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
     const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
     // リアルタイム採点更新
-    const { ratings, comments, isConnected } = useRealtimeRatings({
+    const { ratings, comments, isConnected, optimisticSubmit } = useRealtimeRatings({
         matchId: match.id,
         initialRatings
     });
@@ -151,7 +162,7 @@ export function MatchDetailClient({
         players.forEach(p => {
             if (seen.has(p.id)) return;
             seen.add(p.id);
-            if ((p as any).is_starter === true) starterList.push(p);
+            if (p.is_starter === true) starterList.push(p);
             else subList.push(p);
         });
         return { starters: starterList, substitutes: subList };
@@ -182,6 +193,11 @@ export function MatchDetailClient({
             return;
         }
 
+        // 楽観的更新: UIを即時反映
+        const tempId = crypto.randomUUID();
+        const userName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'ファン';
+        optimisticSubmit(tempId, playerId, score, comment, userName, user.id);
+
         const supabase = createClient();
 
         const { error } = await supabase
@@ -192,8 +208,8 @@ export function MatchDetailClient({
                 player_id: playerId,
                 score,
                 comment: comment || null,
-                user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'ミラニスタ'
-            } as any, {
+                user_name: userName,
+            } as Record<string, unknown>, {
                 onConflict: 'user_id,match_id,player_id'
             });
 
@@ -615,9 +631,9 @@ export function MatchDetailClient({
                                                     name: lu.player_name || p?.name || '',
                                                     number: lu.jersey_number || p?.number || 0,
                                                     pixel_config: p?.pixel_config,
-                                                    __role: (lu as any).role || lu.position_role || p?.position || 'MF',
-                                                    __side: (lu as any).position_side || 'Center',
-                                                    __positionRow: (lu as any).position_row || undefined,
+                                                    __role: lu.role || lu.position_role || p?.position || 'MF',
+                                                    __side: lu.position_side || 'Center',
+                                                    __positionRow: lu.position_row || undefined,
                                                 };
                                             })
                                             : starters.map(player => ({
