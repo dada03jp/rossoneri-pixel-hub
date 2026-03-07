@@ -75,17 +75,17 @@ const HAIR_STYLES: Record<string, number[][]> = {
   ],
 };
 
-export function PixelPlayer({ 
-  config, 
-  number, 
-  size = 64, 
+export function PixelPlayer({
+  config,
+  number,
+  size = 64,
   showNumber = true,
-  className = '' 
+  className = ''
 }: PixelPlayerProps) {
   const pixelSize = size / 16;
   const skinColor = SKIN_COLORS[config.skinTone];
   const hairColor = HAIR_COLORS[config.hairColor];
-  
+
   // Create the pixel grid with hair style applied
   const grid = BASE_PLAYER.map((row, rowIndex) => {
     if (rowIndex < 3) {
@@ -110,13 +110,13 @@ export function PixelPlayer({
   };
 
   return (
-    <div 
+    <div
       className={`relative inline-block ${className}`}
       style={{ width: size, height: size }}
     >
-      <svg 
-        width={size} 
-        height={size} 
+      <svg
+        width={size}
+        height={size}
         viewBox="0 0 16 16"
         style={{ imageRendering: 'pixelated' }}
       >
@@ -137,12 +137,13 @@ export function PixelPlayer({
           })
         )}
       </svg>
-      
+
       {/* Jersey Number Badge */}
       {showNumber && (
-        <div 
-          className="absolute -bottom-1 -right-1 bg-milan-red text-white text-xs font-bold rounded px-1 min-w-[18px] text-center"
-          style={{ 
+        <div
+          className="absolute -bottom-1 -right-1 text-white text-xs font-bold rounded px-1 min-w-[18px] text-center"
+          style={{
+            backgroundColor: 'var(--team-accent, #FB090B)',
             fontSize: Math.max(8, size / 6),
             lineHeight: 1.2,
             boxShadow: '0 1px 2px rgba(0,0,0,0.3)'

@@ -22,9 +22,9 @@ const pressStart2P = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "AC MILAN PIXEL HUB | ACミランファンコミュニティ",
-  description: "ACミランファンのための、熱狂と分析が共存するコミュニティサイト。試合採点、選手評価をドット絵UIで楽しもう。",
-  keywords: ["AC Milan", "ミラン", "セリエA", "サッカー", "採点", "コミュニティ"],
+  title: "PIXEL HUB | サッカーファンコミュニティ",
+  description: "サッカーファンのための、熱狂と分析が共存するコミュニティサイト。試合採点、選手評価をドット絵UIで楽しもう。",
+  keywords: ["サッカー", "セリエA", "採点", "コミュニティ", "ピクセルアート"],
 };
 
 export default function RootLayout({
@@ -48,13 +48,13 @@ export default function RootLayout({
             <div className="container mx-auto px-4 py-8">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 milan-stripes rounded" />
+                  <div className="w-8 h-8 rounded" style={{ background: 'linear-gradient(90deg, var(--team-primary, #AB0920) 50%, var(--team-secondary, #000) 50%)' }} />
                   <span className="text-sm text-muted-foreground">
-                    AC MILAN PIXEL HUB © 2026
+                    PIXEL HUB © 2026
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  このサイトはファンによる非公式サイトです。AC Milanとは直接の関係はありません。
+                  このサイトはファンによる非公式サイトです。各クラブとは直接の関係はありません。
                 </p>
               </div>
             </div>

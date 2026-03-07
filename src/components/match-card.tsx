@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import { Calendar, Trophy } from 'lucide-react';
-import { getTeamColors, MILAN_COLORS } from '@/lib/team-colors';
+import { getTeamColors } from '@/lib/team-colors';
+
+interface TeamKit {
+    home: { primary: string; secondary: string; stripe: boolean };
+    away: { primary: string; secondary: string; stripe: boolean };
+}
 
 interface MatchCardProps {
     id: string;
+    teamId?: string;
+    teamName?: string;
+    teamKit?: TeamKit;
     opponentName: string;
     matchDate: string;
     homeScore: number | null;
@@ -15,6 +23,9 @@ interface MatchCardProps {
 
 export function MatchCard({
     id,
+    teamId = 'milan',
+    teamName = 'AC Milan',
+    teamKit,
     opponentName,
     matchDate,
     homeScore,
@@ -34,29 +45,34 @@ export function MatchCard({
         });
     };
 
-    // ミランのスコアと相手のスコアを取得
-    const milanScore = isHome ? homeScore : awayScore;
+    const myScore = isHome ? homeScore : awayScore;
     const opponentScore = isHome ? awayScore : homeScore;
 
     const getResultStyle = () => {
-        if (!isFinished || milanScore === null || opponentScore === null) return '';
-        if (milanScore > opponentScore) return 'text-green-600 bg-green-50';
-        if (milanScore < opponentScore) return 'text-red-600 bg-red-50';
+        if (!isFinished || myScore === null || opponentScore === null) return '';
+        if (myScore > opponentScore) return 'text-green-600 bg-green-50';
+        if (myScore < opponentScore) return 'text-red-600 bg-red-50';
         return 'text-yellow-600 bg-yellow-50';
     };
 
     const getResultLabel = () => {
-        if (!isFinished || milanScore === null || opponentScore === null) return null;
-        if (milanScore > opponentScore) return 'WIN';
-        if (milanScore < opponentScore) return 'LOSE';
+        if (!isFinished || myScore === null || opponentScore === null) return null;
+        if (myScore > opponentScore) return 'WIN';
+        if (myScore < opponentScore) return 'LOSE';
         return 'DRAW';
     };
 
     const opponentColors = getTeamColors(opponentName);
-    const milanKit = isHome ? MILAN_COLORS.home : MILAN_COLORS.away;
+
+    // チームキット色（デフォルトはミランの色）
+    const kit = teamKit || {
+        home: { primary: '#AB0920', secondary: '#000000', stripe: true },
+        away: { primary: '#FFFFFF', secondary: '#FAFAFF', stripe: false },
+    };
+    const myKit = isHome ? kit.home : kit.away;
 
     return (
-        <Link href={`/matches/${id}`}>
+        <Link href={`/${teamId}/matches/${id}`}>
             <div className="group relative bg-card border border-border rounded-lg p-4 hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer">
                 {/* Competition Badge */}
                 <div className="flex items-center gap-2 mb-3">
@@ -71,24 +87,22 @@ export function MatchCard({
                     )}
                 </div>
 
-                {/* Match Info - Home team on left, Away team on right */}
+                {/* Match Info */}
                 <div className="flex items-center justify-between mb-3">
-                    {/* Home Team (Left Side) */}
+                    {/* Home Team */}
                     <div className="flex items-center gap-3 flex-1">
                         {isHome ? (
                             <>
-                                {/* Milan is Home */}
                                 <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
-                                    <div className="w-1/2 h-full bg-[#AB0920]" />
-                                    <div className="w-1/2 h-full bg-black" />
+                                    <div className="w-1/2 h-full" style={{ backgroundColor: myKit.primary }} />
+                                    <div className="w-1/2 h-full" style={{ backgroundColor: myKit.secondary }} />
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-lg">AC Milan</p>
+                                    <p className="font-semibold text-lg">{teamName}</p>
                                 </div>
                             </>
                         ) : (
                             <>
-                                {/* Opponent is Home - 2 color stripes */}
                                 <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.primary }} />
                                     <div className="w-1/2 h-full" style={{ backgroundColor: opponentColors.secondary }} />
@@ -100,7 +114,7 @@ export function MatchCard({
                         )}
                     </div>
 
-                    {/* Score - always home_score - away_score */}
+                    {/* Score */}
                     <div className="flex items-center gap-2 px-4">
                         {isFinished ? (
                             <div className="flex items-center gap-2 text-2xl font-bold">
@@ -113,27 +127,24 @@ export function MatchCard({
                                 </span>
                             </div>
                         ) : (
-                            <div className="text-lg font-medium text-muted-foreground">
-                                VS
-                            </div>
+                            <div className="text-lg font-medium text-muted-foreground">VS</div>
                         )}
                     </div>
 
-                    {/* Away Team (Right Side) */}
+                    {/* Away Team */}
                     <div className="flex items-center gap-3 flex-1 justify-end">
                         {!isHome ? (
                             <>
-                                {/* Milan is Away */}
                                 <div className="text-right">
-                                    <p className="font-semibold text-lg">AC Milan</p>
+                                    <p className="font-semibold text-lg">{teamName}</p>
                                 </div>
-                                <div className="w-10 h-10 rounded overflow-hidden border border-gray-200">
-                                    <div className="w-full h-full bg-white" />
+                                <div className="w-10 h-10 rounded-sm overflow-hidden flex border border-black shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">
+                                    <div className="w-1/2 h-full" style={{ backgroundColor: kit.away.primary }} />
+                                    <div className="w-1/2 h-full" style={{ backgroundColor: kit.away.secondary }} />
                                 </div>
                             </>
                         ) : (
                             <>
-                                {/* Opponent is Away - 2 color stripes */}
                                 <div className="text-right">
                                     <p className="font-semibold text-lg">{opponentName}</p>
                                 </div>
