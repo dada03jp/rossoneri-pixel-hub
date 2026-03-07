@@ -6,7 +6,7 @@ import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
 import { PlayerCommentModal } from '@/components/PlayerCommentModal';
 import { EventTimeline } from '@/components/event-timeline';
-import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff, Share2 } from 'lucide-react';
+import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff, Share2, Download } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Match, Player, MatchEvent, MatchLineup } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
@@ -16,6 +16,7 @@ import { useRealtimeRatings } from '@/hooks/use-realtime-ratings';
 import { LoginModal } from '@/components/auth/login-modal';
 import { useTeam } from '@/contexts/team-context';
 import { RatingShareCard } from '@/components/rating-share-card';
+import { PixelToastContainer, PixelSkeletonCard, showPixelToast } from '@/components/pixel-effects';
 
 interface MatchDetailClientProps {
     match: Match;
@@ -269,6 +270,7 @@ export function MatchDetailClient({
 
     return (
         <div className="-mt-8 -mx-4">
+            <PixelToastContainer />
             <LoginModal
                 isOpen={isLoginModalOpen}
                 onClose={() => setIsLoginModalOpen(false)}
@@ -498,6 +500,18 @@ export function MatchDetailClient({
                             <strong className="text-yellow-500">{matchAverageRating.toFixed(1)}</strong>
                         </div>
                     )}
+
+                    {/* Share Button in Scoreboard */}
+                    {match.status === 'finished' && Object.keys(userRatings).length > 0 && (
+                        <button
+                            onClick={() => setShowShareCard(true)}
+                            className="mt-3 w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-lg border border-white/20 text-xs transition-all"
+                            style={{ fontFamily: 'monospace' }}
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            📸 採点カードを保存
+                        </button>
+                    )}
                 </div>
 
                 {/* Player Ratings Section */}
@@ -510,6 +524,15 @@ export function MatchDetailClient({
                                 スライダーで1.0〜10.0の間で評価してください
                             </span>
                         </div>
+
+                        {/* Skeleton while loading */}
+                        {loading && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <PixelSkeletonCard key={i} />
+                                ))}
+                            </div>
+                        )}
 
                         {/* Login Prompt for non-authenticated users */}
                         {!loading && !user && (
@@ -800,16 +823,6 @@ export function MatchDetailClient({
                         )}
 
                         {/* Share & Ranking */}
-                        {Object.keys(ratings).length > 0 && Object.keys(userRatings).length > 0 && (
-                            <button
-                                onClick={() => setShowShareCard(true)}
-                                className="w-full flex items-center justify-center gap-2 bg-black text-white font-bold py-3 rounded-lg border-2 border-black text-sm hover:bg-gray-900 transition-colors mb-4"
-                                style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.3)', fontFamily: 'monospace' }}
-                            >
-                                <Share2 className="w-4 h-4" />
-                                📸 採点カードを画像で保存
-                            </button>
-                        )}
                         {Object.keys(ratings).length > 0 && (
                             <RankingCard
                                 title="今試合の評価ランキング"

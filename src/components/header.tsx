@@ -154,21 +154,26 @@ export function BackHeader({ title, subtitle }: BackHeaderProps) {
                 <div className="w-1/2" style={{ backgroundColor: accentColor }} />
                 <div className="w-1/2 bg-black" />
             </div>
-            <div className="container mx-auto flex h-16 items-center gap-4 px-4">
+            <div className="container mx-auto flex h-14 sm:h-16 items-center gap-2 sm:gap-4 px-3 sm:px-4">
                 <Link
                     href={`/${teamId}`}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 sm:gap-2 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 >
-                    <ArrowLeft className="w-5 h-5" />
-                    <span className="text-sm">戻る</span>
+                    <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-xs sm:text-sm">戻る</span>
                 </Link>
 
-                <div className="h-6 w-px bg-border" />
+                <div className="h-6 w-px bg-border flex-shrink-0" />
 
-                <div className="flex flex-col">
-                    <h1 className="text-lg font-bold">{title}</h1>
+                <div className="flex flex-col min-w-0">
+                    <h1
+                        className="font-bold truncate"
+                        style={{ fontSize: 'clamp(0.75rem, 2.5vw, 1.125rem)' }}
+                    >
+                        {title}
+                    </h1>
                     {subtitle && (
-                        <p className="text-xs text-muted-foreground">{subtitle}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{subtitle}</p>
                     )}
                 </div>
             </div>

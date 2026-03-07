@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ======== PixelBurst: 採点確定時のドット弾けエフェクト ========
@@ -17,65 +17,56 @@ interface Particle {
 }
 
 interface PixelBurstProps {
-    trigger: boolean;
-    colors: [string, string]; // [primary, secondary]
-    originX?: number;
-    originY?: number;
+    trigger: number; // 0以外でトリガー（数値インクリメントで再トリガー可能）
+    colors: [string, string];
     particleCount?: number;
-    onComplete?: () => void;
 }
 
 export function PixelBurst({
     trigger,
     colors,
-    originX = 50,
-    originY = 50,
-    particleCount = 16,
-    onComplete,
+    particleCount = 18,
 }: PixelBurstProps) {
     const [particles, setParticles] = useState<Particle[]>([]);
 
     useEffect(() => {
-        if (!trigger) return;
+        if (trigger === 0) return;
 
         const newParticles: Particle[] = [];
         for (let i = 0; i < particleCount; i++) {
-            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
-            const speed = 40 + Math.random() * 60;
+            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.6;
+            const speed = 30 + Math.random() * 50;
             newParticles.push({
                 id: i,
-                x: originX,
-                y: originY,
+                x: 50 + (Math.random() - 0.5) * 20,
+                y: 50 + (Math.random() - 0.5) * 20,
                 vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
+                vy: Math.sin(angle) * speed - 15,
                 color: colors[i % 2],
-                size: 4 + Math.floor(Math.random() * 4),
-                life: 600 + Math.random() * 400,
+                size: 3 + Math.floor(Math.random() * 5),
+                life: 500 + Math.random() * 500,
             });
         }
         setParticles(newParticles);
 
-        const timer = setTimeout(() => {
-            setParticles([]);
-            onComplete?.();
-        }, 1200);
-
+        const timer = setTimeout(() => setParticles([]), 1200);
         return () => clearTimeout(timer);
-    }, [trigger, colors, originX, originY, particleCount, onComplete]);
+    }, [trigger, colors, particleCount]);
+
+    if (particles.length === 0) return null;
 
     return (
-        <AnimatePresence>
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-40">
             {particles.map((p) => (
                 <motion.div
-                    key={p.id}
-                    initial={{ x: p.x, y: p.y, opacity: 1, scale: 1 }}
+                    key={`${trigger}-${p.id}`}
+                    initial={{ x: `${p.x}%`, y: `${p.y}%`, opacity: 1, scale: 1 }}
                     animate={{
-                        x: p.x + p.vx,
-                        y: p.y + p.vy - 20,
+                        x: `${p.x + p.vx}%`,
+                        y: `${p.y + p.vy}%`,
                         opacity: 0,
-                        scale: 0.3,
+                        scale: 0.2,
                     }}
-                    exit={{ opacity: 0 }}
                     transition={{ duration: p.life / 1000, ease: 'easeOut' }}
                     style={{
                         position: 'absolute',
@@ -83,68 +74,49 @@ export function PixelBurst({
                         height: p.size,
                         backgroundColor: p.color,
                         imageRendering: 'pixelated',
-                        pointerEvents: 'none',
-                        zIndex: 50,
                     }}
                 />
             ))}
-        </AnimatePresence>
+        </div>
     );
 }
 
 // ======== RatingSuccessPopup: ピクセルフォントのポップアップ ========
-
-const SUCCESS_MESSAGES = [
-    '🎮 GREAT RATING!',
-    '⭐ SUCCESS!',
-    '🔥 NICE!',
-    '⚡ SAVED!',
-    '✨ PERFECT!',
-];
 
 interface RatingSuccessPopupProps {
     show: boolean;
     score?: number;
 }
 
+function getSuccessMessage(score?: number): string {
+    if (score && score >= 9) return '🔥 PERFECT!';
+    if (score && score >= 8) return '⭐ GREAT RATING!';
+    if (score && score >= 6) return '✨ NICE!';
+    if (score && score <= 3) return '💀 HARSH!';
+    if (score && score <= 4) return '😬 TOUGH!';
+    return '✅ SAVED!';
+}
+
 export function RatingSuccessPopup({ show, score }: RatingSuccessPopupProps) {
-    const [message, setMessage] = useState('');
-
-    useEffect(() => {
-        if (show) {
-            if (score && score >= 8) {
-                setMessage('🔥 GREAT RATING!');
-            } else if (score && score <= 4) {
-                setMessage('💀 HARSH!');
-            } else {
-                setMessage(SUCCESS_MESSAGES[Math.floor(Math.random() * SUCCESS_MESSAGES.length)]);
-            }
-        }
-    }, [show, score]);
-
     return (
         <AnimatePresence>
             {show && (
                 <motion.div
-                    initial={{ opacity: 0, y: 20, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -10, scale: 1 }}
-                    exit={{ opacity: 0, y: -40, scale: 0.8 }}
-                    transition={{
-                        duration: 0.6,
-                        ease: [0.34, 1.56, 0.64, 1], // spring-like
-                    }}
-                    className="absolute inset-x-0 top-0 flex justify-center pointer-events-none z-50"
-                    style={{ fontFamily: 'monospace' }}
+                    initial={{ opacity: 0, y: 10, scale: 0.7 }}
+                    animate={{ opacity: 1, y: -20, scale: 1 }}
+                    exit={{ opacity: 0, y: -40, scale: 0.6 }}
+                    transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+                    className="absolute inset-x-0 -top-2 flex justify-center pointer-events-none z-50"
                 >
                     <div
-                        className="px-4 py-2 bg-black text-white font-bold text-sm rounded border-2 border-white"
+                        className="px-3 py-1.5 bg-black text-white font-bold text-xs rounded border-2 border-white whitespace-nowrap"
                         style={{
                             boxShadow: '3px 3px 0px rgba(0,0,0,0.5)',
-                            imageRendering: 'pixelated',
-                            letterSpacing: '0.1em',
+                            fontFamily: 'monospace',
+                            letterSpacing: '0.05em',
                         }}
                     >
-                        {message}
+                        {getSuccessMessage(score)}
                     </div>
                 </motion.div>
             )}
@@ -155,7 +127,7 @@ export function RatingSuccessPopup({ show, score }: RatingSuccessPopupProps) {
 // ======== PixelHeartBurst: いいねのマイクロインタラクション ========
 
 interface PixelHeartBurstProps {
-    trigger: boolean;
+    trigger: number; // 0以外でトリガー
     color?: string;
 }
 
@@ -163,52 +135,37 @@ export function PixelHeartBurst({ trigger, color = '#FB090B' }: PixelHeartBurstP
     const [hearts, setHearts] = useState<{ id: number; x: number; y: number; scale: number; rotation: number }[]>([]);
 
     useEffect(() => {
-        if (!trigger) return;
+        if (trigger === 0) return;
 
-        const newHearts = Array.from({ length: 6 }, (_, i) => ({
+        const newHearts = Array.from({ length: 5 }, (_, i) => ({
             id: Date.now() + i,
-            x: (Math.random() - 0.5) * 40,
-            y: -10 - Math.random() * 30,
-            scale: 0.6 + Math.random() * 0.6,
+            x: (Math.random() - 0.5) * 30,
+            y: -8 - Math.random() * 25,
+            scale: 0.5 + Math.random() * 0.5,
             rotation: (Math.random() - 0.5) * 30,
         }));
         setHearts(newHearts);
-
-        const timer = setTimeout(() => setHearts([]), 800);
+        const timer = setTimeout(() => setHearts([]), 700);
         return () => clearTimeout(timer);
     }, [trigger]);
 
+    if (hearts.length === 0) return null;
+
     return (
-        <AnimatePresence>
+        <>
             {hearts.map((h) => (
-                <motion.div
+                <motion.span
                     key={h.id}
-                    initial={{ opacity: 1, y: 0, x: 0, scale: 0, rotate: 0 }}
-                    animate={{
-                        opacity: 0,
-                        y: h.y,
-                        x: h.x,
-                        scale: h.scale,
-                        rotate: h.rotation,
-                    }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.7, ease: 'easeOut' }}
-                    style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        pointerEvents: 'none',
-                        zIndex: 50,
-                        fontSize: '14px',
-                        color: color,
-                        fontFamily: 'monospace',
-                        imageRendering: 'pixelated',
-                    }}
+                    initial={{ opacity: 1, y: 0, x: 0, scale: 0 }}
+                    animate={{ opacity: 0, y: h.y, x: h.x, scale: h.scale, rotate: h.rotation }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                    className="absolute top-1/2 left-1/2 pointer-events-none z-50"
+                    style={{ color, fontFamily: 'monospace', fontSize: '12px' }}
                 >
                     ♥
-                </motion.div>
+                </motion.span>
             ))}
-        </AnimatePresence>
+        </>
     );
 }
 
@@ -224,50 +181,171 @@ interface AnimatedCounterProps {
 export function AnimatedCounter({
     value,
     decimals = 1,
-    duration = 600,
+    duration = 500,
     className = '',
 }: AnimatedCounterProps) {
     const [displayValue, setDisplayValue] = useState(value);
-    const [prevValue, setPrevValue] = useState(value);
+    const prevValueRef = useRef(value);
     const [direction, setDirection] = useState<'up' | 'down' | null>(null);
 
     useEffect(() => {
-        if (value === prevValue) return;
+        const prev = prevValueRef.current;
+        if (value === prev) return;
 
-        setDirection(value > prevValue ? 'up' : 'down');
-        const startValue = prevValue;
-        const diff = value - startValue;
+        setDirection(value > prev ? 'up' : 'down');
+        const diff = value - prev;
         const startTime = performance.now();
 
-        let animFrame: number;
+        let frameId: number;
         const animate = (now: number) => {
             const elapsed = now - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            // ease-out cubic
             const eased = 1 - Math.pow(1 - progress, 3);
-            setDisplayValue(startValue + diff * eased);
+            setDisplayValue(prev + diff * eased);
 
             if (progress < 1) {
-                animFrame = requestAnimationFrame(animate);
+                frameId = requestAnimationFrame(animate);
             } else {
                 setDisplayValue(value);
-                setTimeout(() => setDirection(null), 300);
+                setTimeout(() => setDirection(null), 400);
             }
         };
 
-        animFrame = requestAnimationFrame(animate);
-        setPrevValue(value);
+        frameId = requestAnimationFrame(animate);
+        prevValueRef.current = value;
 
-        return () => cancelAnimationFrame(animFrame);
-    }, [value, prevValue, duration]);
+        return () => cancelAnimationFrame(frameId);
+    }, [value, duration]);
 
     return (
         <span
-            className={`font-mono font-bold transition-colors duration-300 ${direction === 'up' ? 'text-green-500' : direction === 'down' ? 'text-red-500' : ''
+            className={`font-mono font-bold transition-colors duration-300 ${direction === 'up' ? '!text-green-500' : direction === 'down' ? '!text-red-500' : ''
                 } ${className}`}
             style={{ fontVariantNumeric: 'tabular-nums' }}
         >
             {displayValue.toFixed(decimals)}
         </span>
+    );
+}
+
+// ======== PixelToast: 通知トースト ========
+
+interface ToastData {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
+
+let toastIdCounter = 0;
+const toastListeners: Array<(toast: ToastData) => void> = [];
+
+export function showPixelToast(message: string, type: 'success' | 'error' | 'info' = 'success') {
+    const toast: ToastData = { id: ++toastIdCounter, message, type };
+    toastListeners.forEach(fn => fn(toast));
+}
+
+export function PixelToastContainer() {
+    const [toasts, setToasts] = useState<ToastData[]>([]);
+
+    useEffect(() => {
+        const listener = (toast: ToastData) => {
+            setToasts(prev => [toast, ...prev].slice(0, 3));
+            setTimeout(() => {
+                setToasts(prev => prev.filter(t => t.id !== toast.id));
+            }, 2500);
+        };
+        toastListeners.push(listener);
+        return () => {
+            const idx = toastListeners.indexOf(listener);
+            if (idx >= 0) toastListeners.splice(idx, 1);
+        };
+    }, []);
+
+    const colors = {
+        success: 'bg-green-600 border-green-400',
+        error: 'bg-red-600 border-red-400',
+        info: 'bg-blue-600 border-blue-400',
+    };
+
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+
+    return (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none">
+            <AnimatePresence>
+                {toasts.map(t => (
+                    <motion.div
+                        key={t.id}
+                        initial={{ opacity: 0, y: -20, scale: 0.8 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.9 }}
+                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                        className={`px-4 py-2 text-white text-xs font-bold rounded border-2 shadow-lg whitespace-nowrap ${colors[t.type]}`}
+                        style={{ fontFamily: 'monospace', boxShadow: '3px 3px 0px rgba(0,0,0,0.4)' }}
+                    >
+                        {icons[t.type]} {t.message}
+                    </motion.div>
+                ))}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+// ======== SkeletonCard: ピクセルアート風スケルトン ========
+
+export function PixelSkeletonCard() {
+    return (
+        <div
+            className="bg-white rounded-lg p-4 border-2 border-gray-200"
+            style={{
+                boxShadow: '4px 4px 0px 0px rgba(0,0,0,0.1)',
+                backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px)',
+                backgroundSize: '8px 8px',
+            }}
+        >
+            <div className="flex items-center gap-3 mb-3">
+                <div className="w-16 h-16 bg-gray-200 rounded animate-pulse" style={{ imageRendering: 'pixelated' }} />
+                <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-24 animate-pulse" />
+                    <div className="h-3 bg-gray-100 rounded w-16 animate-pulse" />
+                </div>
+                <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+            </div>
+            <div className="h-px bg-gray-100 mb-3" />
+            <div className="space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-full animate-pulse" />
+                <div className="h-8 bg-gray-100 rounded animate-pulse" />
+            </div>
+        </div>
+    );
+}
+
+// ======== EmptyState: ピクセルアート風の空状態 ========
+
+interface EmptyStateProps {
+    message?: string;
+    subMessage?: string;
+}
+
+export function PixelEmptyState({
+    message = 'まだコメントがありません',
+    subMessage = '最初のファンになりましょう！',
+}: EmptyStateProps) {
+    return (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+            <motion.div
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="text-3xl mb-3"
+                style={{ imageRendering: 'pixelated' }}
+            >
+                💬
+            </motion.div>
+            <p className="text-sm font-bold text-gray-500" style={{ fontFamily: 'monospace' }}>
+                {message}
+            </p>
+            <p className="text-xs text-gray-400 mt-1" style={{ fontFamily: 'monospace' }}>
+                {subMessage}
+            </p>
+        </div>
     );
 }

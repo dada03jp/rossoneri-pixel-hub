@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { Rating } from '@/types/database';
 
 // ======== 型定義 ========
 
@@ -31,9 +30,18 @@ interface UseRealtimeRatingsOptions {
 
 // ======== Delta マージユーティリティ ========
 
-/** 個別スコアを保持し、平均を即座に再計算するための内部ストア */
+/** 個別スコアを保持し、平均を即座に再計算するための内部ストア
+ *  IMPORTANT: 不変性を保つため、更新時は必ず新しいオブジェクトを生成する
+ */
 type ScoreStore = Record<string, Map<string, number>>;
-// ScoreStore[playerId] = Map<ratingId, score>
+
+function cloneStore(store: ScoreStore): ScoreStore {
+    const cloned: ScoreStore = {};
+    for (const [key, map] of Object.entries(store)) {
+        cloned[key] = new Map(map);
+    }
+    return cloned;
+}
 
 function buildRatingData(store: ScoreStore): Record<string, RatingData> {
     const result: Record<string, RatingData> = {};
@@ -50,7 +58,7 @@ function buildRatingData(store: ScoreStore): Record<string, RatingData> {
 }
 
 // ======== バックグラウンド同期間隔 ========
-const BACKGROUND_SYNC_INTERVAL_MS = 60_000; // 60秒
+const BACKGROUND_SYNC_INTERVAL_MS = 60_000;
 
 // ======== Hook本体 ========
 
@@ -59,24 +67,24 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
     const [comments, setComments] = useState<Record<string, ProcessedComment[]>>({});
     const [isConnected, setIsConnected] = useState(false);
 
-    // 内部スコアストア (ref で保持し、delta計算の元データとする)
-    // initialRatings から仮の ScoreStore を生成（fetchAll で実データに上書きされる）
-    const initialStore: ScoreStore = {};
-    for (const [playerId, data] of Object.entries(initialRatings)) {
-        const map = new Map<string, number>();
-        for (let i = 0; i < data.count; i++) {
-            map.set(`__init_${playerId}_${i}`, data.average);
-        }
-        initialStore[playerId] = map;
-    }
-    const scoreStoreRef = useRef<ScoreStore>(initialStore);
+    // 内部スコアストア（ref で保持し delta 計算の元データとする）
+    const scoreStoreRef = useRef<ScoreStore>({});
     const isMounted = useRef(true);
+    const initializedRef = useRef(false);
+
+    // ======== スコアストア更新ヘルパー（不変更新 + setState） ========
+    const updateStore = useCallback((mutator: (store: ScoreStore) => ScoreStore) => {
+        const newStore = mutator(scoreStoreRef.current);
+        scoreStoreRef.current = newStore;
+        if (isMounted.current) {
+            setRatings(buildRatingData(newStore));
+        }
+    }, []);
 
     // ======== 全件取得（初期ロード + バックグラウンド同期） ========
     const fetchAll = useCallback(async () => {
         const supabase = createClient();
 
-        // 1. 評価データ全件取得
         const { data: ratingsData, error: ratingsError } = await supabase
             .from('ratings')
             .select('id, player_id, score')
@@ -94,7 +102,6 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             }
         }
 
-        // 2. コメント付き評価取得
         const { data: commentsData, error: commentsError } = await supabase
             .from('ratings')
             .select('id, player_id, user_id, user_name, score, comment, created_at')
@@ -129,9 +136,11 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             });
             setComments(processed);
         }
+
+        initializedRef.current = true;
     }, [matchId]);
 
-    // ======== Delta マージ (INSERT) ========
+    // ======== Delta マージ (INSERT) — 不変更新 ========
     const mergeInsert = useCallback((payload: { new: Record<string, unknown> }) => {
         const row = payload.new as {
             id: string;
@@ -143,21 +152,21 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             created_at: string;
         };
 
-        // スコアストアに追加
-        const store = scoreStoreRef.current;
-        if (!store[row.player_id]) store[row.player_id] = new Map();
-        store[row.player_id].set(row.id, row.score);
+        // スコアストアをクローンして更新（不変性保証）
+        updateStore((store) => {
+            const newStore = cloneStore(store);
+            if (!newStore[row.player_id]) newStore[row.player_id] = new Map();
+            newStore[row.player_id].set(row.id, row.score);
+            return newStore;
+        });
 
-        // ratings state 更新
-        setRatings(buildRatingData(store));
-
-        // コメントがあれば comments state にも追加
+        // コメントがあれば追加（既存配列をスプレッドし先頭に追加）
         if (row.comment && row.comment.trim() !== '') {
             setComments(prev => {
-                const playerComments = [...(prev[row.player_id] || [])];
+                const existing = prev[row.player_id] || [];
                 // 重複防止
-                if (playerComments.some(c => c.id === row.id)) return prev;
-                playerComments.unshift({
+                if (existing.some(c => c.id === row.id)) return prev;
+                const newComment: ProcessedComment = {
                     id: row.id,
                     playerId: row.player_id,
                     playerName: '',
@@ -168,60 +177,69 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
                     createdAt: row.created_at,
                     likesCount: 0,
                     hasLiked: false,
-                });
-                return { ...prev, [row.player_id]: playerComments };
+                };
+                return {
+                    ...prev,
+                    [row.player_id]: [newComment, ...existing],
+                };
             });
         }
-    }, []);
+    }, [updateStore]);
 
-    // ======== Delta マージ (UPDATE) ========
+    // ======== Delta マージ (UPDATE) — 不変更新 ========
     const mergeUpdate = useCallback((payload: { new: Record<string, unknown> }) => {
         const row = payload.new as {
             id: string;
             player_id: string;
             score: number;
             comment: string | null;
+            user_id: string;
             user_name: string | null;
         };
 
-        const store = scoreStoreRef.current;
-        if (!store[row.player_id]) store[row.player_id] = new Map();
-        store[row.player_id].set(row.id, row.score);
+        updateStore((store) => {
+            const newStore = cloneStore(store);
+            if (!newStore[row.player_id]) newStore[row.player_id] = new Map();
+            newStore[row.player_id].set(row.id, row.score);
+            return newStore;
+        });
 
-        setRatings(buildRatingData(store));
-
-        // コメント更新
+        // コメント更新（既存配列を正しくスプレッド）
         setComments(prev => {
-            const playerComments = [...(prev[row.player_id] || [])];
-            const idx = playerComments.findIndex(c => c.id === row.id);
+            const existing = prev[row.player_id] || [];
+            const idx = existing.findIndex(c => c.id === row.id);
+
             if (idx >= 0) {
+                const updated = [...existing];
                 if (row.comment && row.comment.trim() !== '') {
-                    playerComments[idx] = { ...playerComments[idx], score: row.score, comment: row.comment };
+                    updated[idx] = { ...updated[idx], score: row.score, comment: row.comment };
                 } else {
-                    playerComments.splice(idx, 1);
+                    updated.splice(idx, 1);
                 }
-                return { ...prev, [row.player_id]: playerComments };
+                return { ...prev, [row.player_id]: updated };
             } else if (row.comment && row.comment.trim() !== '') {
-                // 新規コメント
-                playerComments.unshift({
+                const newComment: ProcessedComment = {
                     id: row.id,
                     playerId: row.player_id,
                     playerName: '',
-                    userId: '',
+                    userId: row.user_id || '',
                     userName: row.user_name || 'ファン',
                     score: row.score,
                     comment: row.comment,
                     createdAt: new Date().toISOString(),
                     likesCount: 0,
                     hasLiked: false,
-                });
-                return { ...prev, [row.player_id]: playerComments };
+                };
+                return {
+                    ...prev,
+                    [row.player_id]: [newComment, ...existing],
+                };
             }
             return prev;
         });
-    }, []);
+    }, [updateStore]);
 
-    // ======== 楽観的更新 ========
+    // ======== 楽観的更新 — 不変更新 ========
     const optimisticSubmit = useCallback((
         ratingId: string,
         playerId: string,
@@ -230,17 +248,18 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
         userName: string,
         userId: string,
     ) => {
-        // スコアストアに即時反映
-        const store = scoreStoreRef.current;
-        if (!store[playerId]) store[playerId] = new Map();
-        store[playerId].set(ratingId, score);
-        setRatings(buildRatingData(store));
+        updateStore((store) => {
+            const newStore = cloneStore(store);
+            if (!newStore[playerId]) newStore[playerId] = new Map();
+            newStore[playerId].set(ratingId, score);
+            return newStore;
+        });
 
-        // コメントも即時反映
+        // コメントも即時反映（既存コメントを保持）
         if (comment.trim() !== '') {
             setComments(prev => {
-                const playerComments = [...(prev[playerId] || [])];
-                const existingIdx = playerComments.findIndex(c => c.userId === userId);
+                const existing = prev[playerId] || [];
+                const existingIdx = existing.findIndex(c => c.userId === userId);
                 const newComment: ProcessedComment = {
                     id: ratingId,
                     playerId,
@@ -254,20 +273,21 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
                     hasLiked: false,
                 };
                 if (existingIdx >= 0) {
-                    playerComments[existingIdx] = newComment;
-                } else {
-                    playerComments.unshift(newComment);
+                    const updated = [...existing];
+                    updated[existingIdx] = newComment;
+                    return { ...prev, [playerId]: updated };
                 }
-                return { ...prev, [playerId]: playerComments };
+                return {
+                    ...prev,
+                    [playerId]: [newComment, ...existing],
+                };
             });
         }
-    }, []);
+    }, [updateStore]);
 
     // ======== Realtime チャネル接続 + バックグラウンド同期 ========
     useEffect(() => {
         isMounted.current = true;
-
-        // 初回フェッチ
         fetchAll();
 
         const supabase = createClient();
@@ -299,13 +319,10 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             )
             .subscribe((status) => {
                 if (!isMounted.current) return;
-
                 if (status === 'SUBSCRIBED') {
                     setIsConnected(true);
                 } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     setIsConnected(false);
-                    // 自動再接続: Supabase クライアントが内部で再試行するが、
-                    // フォールバックとして5秒後に全件同期
                     setTimeout(() => {
                         if (isMounted.current) fetchAll();
                     }, 5000);
@@ -314,7 +331,6 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
                 }
             });
 
-        // バックグラウンド同期 (ドリフト防止)
         const syncTimer = setInterval(() => {
             if (isMounted.current) fetchAll();
         }, BACKGROUND_SYNC_INTERVAL_MS);
