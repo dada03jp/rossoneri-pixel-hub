@@ -63,6 +63,7 @@ export interface MatchLineup {
     role: DetailedRole | LegacyRole;
     position_side: 'Left' | 'Center' | 'Right';
     position_row: number; // 1:GK, 2:DF, 3:DM/WB, 4:CM/AM, 5:FW
+    position_col?: number; // 1:左, 2:左寄り, 3:中央, 4:右寄り, 5:右
     position_x: number;
     position_y: number;
     minutes_played?: number;
@@ -159,6 +160,7 @@ export interface FormationTemplatePosition {
     role: DetailedRole;
     position_row: number;
     position_side: 'Left' | 'Center' | 'Right';
+    position_col?: number;
 }
 
 export interface FormationTemplate {

@@ -44,11 +44,12 @@ interface PlayerCommentModalProps {
     totalRatings: number;
     user: User | null;
     onAuthAction: () => void;
+    filterUserId?: string | null;
 }
 
 export function PlayerCommentModal({
     isOpen, onClose, playerId, matchId, playerName, playerNumber,
-    playerPosition, pixelConfig, averageRating, totalRatings, user, onAuthAction,
+    playerPosition, pixelConfig, averageRating, totalRatings, user, onAuthAction, filterUserId,
 }: PlayerCommentModalProps) {
     const [comments, setComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -151,13 +152,17 @@ export function PlayerCommentModal({
 
     // ── ソート ──
     const sortedComments = useMemo(() => {
-        const sorted = [...comments];
-        if (sortBy === 'likes') {
-            sorted.sort((a, b) => b.likes_count - a.likes_count || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        } else {
-            sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        let filtered = [...comments];
+        // 「自分の評価」モード時はユーザーのコメントのみ
+        if (filterUserId) {
+            filtered = filtered.filter(c => c.user_id === filterUserId);
         }
-        return sorted;
+        if (sortBy === 'likes') {
+            filtered.sort((a, b) => b.likes_count - a.likes_count || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        } else {
+            filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        }
+        return filtered;
     }, [comments, sortBy]);
 
     // ── いいね ──

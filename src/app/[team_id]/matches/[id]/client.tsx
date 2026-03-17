@@ -36,16 +36,18 @@ interface PitchPlayer {
     __role: string;
     __side: string;
     __positionRow?: number;
+    __positionCol?: number;
 }
 
-// フォーメーション座標計算ヘルパー（position_row + role + side 対応）
+// フォーメーション座標計算ヘルパー（position_row + position_col + role + side 対応）
 function getFormationPosition(
     role: string,
     side: string,
     formation: string,
     allStarters: PitchPlayer[],
     playerId: string,
-    positionRow?: number
+    positionRow?: number,
+    positionCol?: number
 ): { x: number; y: number } {
     // --- Y座標: position_row があればそれを使う、なければ role から推定 ---
     const rowYMap: Record<number, number> = {
@@ -61,14 +63,18 @@ function getFormationPosition(
     const effectiveRow = positionRow || roleToRow[role] || 3;
     const y = rowYMap[effectiveRow] ?? 50;
 
-    // --- X座標: side ベース + 同 row 内での分散 ---
-    // 同じ row の選手を抽出
+    // --- X座標: position_col があれば直接変換 ---
+    if (positionCol && positionCol >= 1 && positionCol <= 5) {
+        const colXMap: Record<number, number> = { 1: 12, 2: 30, 3: 50, 4: 70, 5: 88 };
+        return { x: colXMap[positionCol] ?? 50, y };
+    }
+
+    // --- X座標: フォールバック（side ベース + 同 row 内での分散） ---
     const sameRow = allStarters.filter(p => {
         const pRow = p.__positionRow || roleToRow[p.__role] || 3;
         return pRow === effectiveRow;
     });
 
-    // Left/Right は固定位置（row に応じた微調整で WB と SB の重なりを回避）
     if (side === 'Left') {
         const xOffset = effectiveRow === 3 ? 12 : effectiveRow === 2 ? 16 : 20;
         return { x: xOffset, y };
@@ -78,7 +84,6 @@ function getFormationPosition(
         return { x: xOffset, y };
     }
 
-    // Center: 同 row・同 side の選手をカウントして等間隔に配置
     const centersInRow = sameRow.filter(p => {
         const pSide = p.__side || 'Center';
         return pSide === 'Center';
@@ -86,7 +91,6 @@ function getFormationPosition(
     const idx = centersInRow.findIndex(p => p.id === playerId);
     const count = Math.max(centersInRow.length, 1);
     if (count === 1) return { x: 50, y };
-    // 動的スペーシング: 2人なら広め、3人以上なら詰める
     const maxSpread = count <= 2 ? 30 : 24;
     const startX = 50 - ((count - 1) * maxSpread) / 2;
     return { x: startX + idx * maxSpread, y };
@@ -103,7 +107,7 @@ export function MatchDetailClient({
     // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
     const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
     // リアルタイム採点更新
-    const { ratings, comments, isConnected, optimisticSubmit } = useRealtimeRatings({
+    const { ratings, comments, isConnected, optimisticSubmit, getUserRatings } = useRealtimeRatings({
         matchId: match.id,
         initialRatings
     });
@@ -113,6 +117,7 @@ export function MatchDetailClient({
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
     const [showShareCard, setShowShareCard] = useState(false);
+    const [ratingViewMode, setRatingViewMode] = useState<'all' | 'mine'>('all');
 
     // チーム情報
     const { team: teamConfig } = useTeam();
@@ -301,6 +306,7 @@ export function MatchDetailClient({
                         totalRatings={playerRating?.count || 0}
                         user={user}
                         onAuthAction={handleSignIn}
+                        filterUserId={ratingViewMode === 'mine' ? user?.id : null}
                     />
                 );
             })()}
@@ -640,9 +646,34 @@ export function MatchDetailClient({
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* LEFT: Formation Pitch */}
                             <div className="lg:col-span-2 space-y-2">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
-                                    ⚽ フォーメーション{match.formation ? ` (${match.formation})` : ''}
-                                </h3>
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                                        ⚽ フォーメーション{match.formation ? ` (${match.formation})` : ''}
+                                    </h3>
+                                    {/* みんな / 自分の評価タブ */}
+                                    <div className="flex bg-muted rounded-lg p-0.5 text-xs">
+                                        <button
+                                            onClick={() => setRatingViewMode('all')}
+                                            className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                                                ratingViewMode === 'all'
+                                                    ? 'bg-white shadow-sm text-foreground'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            👥 みんなの評価
+                                        </button>
+                                        <button
+                                            onClick={() => setRatingViewMode('mine')}
+                                            className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                                                ratingViewMode === 'mine'
+                                                    ? 'bg-white shadow-sm text-foreground'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            }`}
+                                        >
+                                            🙋 自分の評価
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="relative w-full aspect-[2/3] sm:aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
                                     style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)', minHeight: '320px' }}>
                                     {/* Pitch Lines */}
@@ -675,6 +706,7 @@ export function MatchDetailClient({
                                                     __role: lu.role || lu.position_role || p?.position || 'MF',
                                                     __side: lu.position_side || 'Center',
                                                     __positionRow: lu.position_row || undefined,
+                                                    __positionCol: lu.position_col || undefined,
                                                 };
                                             })
                                             : starters.map(player => ({
@@ -682,6 +714,7 @@ export function MatchDetailClient({
                                                 __role: player.position || 'MF',
                                                 __side: 'Center' as string,
                                                 __positionRow: undefined as number | undefined,
+                                                __positionCol: undefined as number | undefined,
                                             }));
 
                                         // Ensure unique players for display on pitch
@@ -690,28 +723,32 @@ export function MatchDetailClient({
                                         );
 
                                         return uniquePitchPlayers.map(player => {
-                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow);
-                                            const playerRating = ratings[player.id];
+                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow, player.__positionCol);
+                                            // ratingViewMode に応じてスコアを切り替え
+                                            const myRatings = user ? getUserRatings(user.id) : {};
+                                            const playerRating = ratingViewMode === 'all'
+                                                ? (ratings[player.id] ? { average: ratings[player.id].average, count: ratings[player.id].count } : null)
+                                                : (myRatings[player.id] ? { average: myRatings[player.id], count: 1 } : null);
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0 group cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-px group cursor-pointer transition-transform hover:scale-110 active:scale-95"
                                                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
-                                                    <div className="relative flex items-center justify-center w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]">
+                                                    <div className="relative z-0 flex items-center justify-center w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]">
                                                         {player.pixel_config && (
                                                             <div className="w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
                                                                 <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
                                                             </div>
                                                         )}
                                                         {playerRating && (
-                                                            <span className="absolute -bottom-0.5 -right-0.5 sm:-bottom-1 sm:-right-1 bg-white text-[7px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black leading-tight">
+                                                            <span className="absolute -bottom-0.5 -right-0.5 sm:-bottom-1 sm:-right-1 bg-white text-[7px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black leading-tight z-20">
                                                                 {playerRating.average.toFixed(1)}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span className="text-[7px] sm:text-[10px] font-medium text-white bg-black/70 px-0.5 sm:px-1 py-px sm:py-0.5 rounded max-w-[48px] sm:max-w-none truncate text-center leading-tight">
+                                                    <span className="relative z-10 text-[7px] sm:text-[10px] font-medium text-white bg-black/80 px-1 sm:px-1 py-px sm:py-0.5 rounded max-w-[48px] sm:max-w-none truncate text-center leading-tight shadow-sm">
                                                         {player.name.split(' ').pop()}
                                                     </span>
                                                 </div>
@@ -878,6 +915,59 @@ export function MatchDetailClient({
                         score: r.score,
                     };
                 }).sort((a, b) => b.score - a.score)}
+                formation={match.formation || '4-3-3'}
+                userName={user?.user_metadata?.username || user?.email?.split('@')[0] || 'ミラニスタ'}
+                formationPlayers={(() => {
+                    const lineupStarters = lineups.filter(l => l.is_starter);
+                    if (lineupStarters.length === 0) return undefined;
+                    const roleToRow: Record<string, number> = { GK: 1, CB: 2, DF: 2, WB: 3, DM: 3, CM: 4, MF: 4, AM: 4, ST: 5, FW: 5 };
+                    const rowYMap: Record<number, number> = { 1: 90, 2: 74, 3: 56, 4: 38, 5: 18 };
+                    const colXMap: Record<number, number> = { 1: 12, 2: 30, 3: 50, 4: 70, 5: 88 };
+                    const seenIds = new Set<string>();
+                    const starters = lineupStarters.filter(lu => {
+                        if (!lu.player_id || seenIds.has(lu.player_id)) return false;
+                        seenIds.add(lu.player_id);
+                        return true;
+                    });
+                    const pitchData = starters.map(lu => ({
+                        id: lu.player_id || '',
+                        __role: lu.role || lu.position_role || 'MF',
+                        __side: lu.position_side || 'Center',
+                        __positionRow: lu.position_row,
+                        __positionCol: lu.position_col,
+                    }));
+                    return starters.map(lu => {
+                        const p = players.find(pl => pl.id === lu.player_id);
+                        const row = lu.position_row || roleToRow[lu.role || lu.position_role || 'MF'] || 3;
+                        const y = rowYMap[row] ?? 50;
+                        let x: number;
+                        if (lu.position_col && lu.position_col >= 1 && lu.position_col <= 5) {
+                            x = colXMap[lu.position_col];
+                        } else if (lu.position_side === 'Left') {
+                            x = row === 3 ? 12 : 16;
+                        } else if (lu.position_side === 'Right') {
+                            x = row === 3 ? 88 : 84;
+                        } else {
+                            const centersInRow = pitchData.filter(pd => {
+                                const pRow = pd.__positionRow || roleToRow[pd.__role] || 3;
+                                return pRow === row && pd.__side === 'Center';
+                            });
+                            const idx = centersInRow.findIndex(pd => pd.id === lu.player_id);
+                            const count = Math.max(centersInRow.length, 1);
+                            if (count === 1) { x = 50; }
+                            else { x = 50 - ((count - 1) * 24) / 2 + idx * 24; }
+                        }
+                        const myScore = userRatings[lu.player_id || ''];
+                        return {
+                            id: lu.player_id || '',
+                            name: lu.player_name || p?.name || '',
+                            number: lu.jersey_number || p?.number || 0,
+                            score: myScore ? myScore.score : null,
+                            x,
+                            y,
+                        };
+                    });
+                })()}
             />
         </div>
     );

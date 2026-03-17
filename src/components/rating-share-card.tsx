@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Copy, Check, X, Star, Sparkles, Share2 } from 'lucide-react';
+import { Copy, Check, X, Star, Sparkles, Share2 } from 'lucide-react';
 import { useTeam } from '@/contexts/team-context';
 import { showPixelToast } from '@/components/pixel-effects';
 
@@ -13,6 +13,15 @@ interface PlayerRatingEntry {
     score: number;
 }
 
+interface FormationPlayer {
+    id: string;
+    name: string;
+    number: number;
+    score: number | null;
+    x: number; // 0-100
+    y: number; // 0-100
+}
+
 interface RatingShareCardProps {
     matchTitle: string;
     matchDate: string;
@@ -21,6 +30,10 @@ interface RatingShareCardProps {
     playerRatings: PlayerRatingEntry[];
     show: boolean;
     onClose: () => void;
+    // フォーメーション図シェア用
+    formationPlayers?: FormationPlayer[];
+    formation?: string;
+    userName?: string;
 }
 
 function getScoreColor(score: number): string {
@@ -37,7 +50,6 @@ function getScoreGradient(score: number): [string, string] {
     return ['#ef4444', '#f87171'];
 }
 
-// ピクセルドット装飾を描画するヘルパー
 function drawPixelDots(ctx: CanvasRenderingContext2D, W: number, H: number, color: string, opacity: number = 0.06) {
     ctx.fillStyle = color;
     ctx.globalAlpha = opacity;
@@ -50,7 +62,6 @@ function drawPixelDots(ctx: CanvasRenderingContext2D, W: number, H: number, colo
     ctx.globalAlpha = 1;
 }
 
-// 角丸四角形ヘルパー（roundRect未対応ブラウザ用）
 function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -73,17 +84,26 @@ export function RatingShareCard({
     playerRatings,
     show,
     onClose,
+    formationPlayers,
+    formation,
+    userName,
 }: RatingShareCardProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { team } = useTeam();
     const [copied, setCopied] = useState(false);
+    const [shareTab, setShareTab] = useState<'list' | 'formation'>('list');
 
-    // 平均スコア
     const avgScore = playerRatings.length > 0
         ? playerRatings.reduce((s, p) => s + p.score, 0) / playerRatings.length
         : 0;
 
-    const drawCard = useCallback(() => {
+    // My MVP (highest score player)
+    const myMvp = playerRatings.length > 0
+        ? playerRatings.reduce((best, p) => p.score > best.score ? p : best, playerRatings[0])
+        : null;
+
+    // ====== レーティング一覧 Canvas ======
+    const drawListCard = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -94,7 +114,6 @@ export function RatingShareCard({
         canvas.width = W;
         canvas.height = H;
 
-        // ====== 背景: チームカラーのリッチグラデーション ======
         const bgGrad = ctx.createLinearGradient(0, 0, W, H);
         bgGrad.addColorStop(0, team.colors.primary);
         bgGrad.addColorStop(0.5, '#0a0a14');
@@ -102,11 +121,10 @@ export function RatingShareCard({
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, W, H);
 
-        // ピクセルドット装飾
         drawPixelDots(ctx, W, H, team.colors.accent, 0.08);
         drawPixelDots(ctx, W, H, '#ffffff', 0.03);
 
-        // ====== トップバー（チームカラーのグローイングライン） ======
+        // トップバー
         const barGrad = ctx.createLinearGradient(0, 0, W, 0);
         barGrad.addColorStop(0, 'transparent');
         barGrad.addColorStop(0.2, team.colors.accent);
@@ -114,66 +132,53 @@ export function RatingShareCard({
         barGrad.addColorStop(1, 'transparent');
         ctx.fillStyle = barGrad;
         ctx.fillRect(0, 0, W, 4);
-        // グロー
         ctx.shadowColor = team.colors.accent;
         ctx.shadowBlur = 15;
         ctx.fillRect(0, 0, W, 2);
         ctx.shadowBlur = 0;
 
-        // ====== ヘッダー: チーム名 + ブランド ======
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('⚽ MATCH DAY REPORT', W / 2, 30);
-
         ctx.fillStyle = team.colors.accent;
         ctx.font = 'bold 13px monospace';
         ctx.fillText(`━━  ${team.name.toUpperCase()} PIXEL HUB  ━━`, W / 2, 50);
 
-        // ====== 試合カード（中央の半透明カード） ======
+        // カード
         const cardY = 62;
         const cardH = 90;
-        const cardMargin = 40;
-        drawRoundRect(ctx, cardMargin, cardY, W - cardMargin * 2, cardH, 12);
+        drawRoundRect(ctx, 40, cardY, W - 80, cardH, 12);
         ctx.fillStyle = 'rgba(255,255,255,0.07)';
         ctx.fill();
         ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 対戦タイトル
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 22px monospace';
         ctx.textAlign = 'center';
         ctx.fillText(matchTitle, W / 2, cardY + 32);
-
-        // スコア（大きく）
         ctx.font = 'bold 36px monospace';
-        ctx.fillStyle = '#FFFFFF';
         ctx.fillText(resultText, W / 2, cardY + 72);
 
-        // 大会・日付
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.font = '11px monospace';
         ctx.fillText(`${competition} • ${new Date(matchDate).toLocaleDateString('ja-JP')}`, W / 2, cardY + cardH + 18);
 
-        // ====== 平均スコア（大きなグラデーション丸バッジ） ======
+        // 平均スコア
         const avgY = cardY + cardH + 55;
         const avgR = 36;
         const [avgC1, avgC2] = getScoreGradient(avgScore);
         const avgGrad = ctx.createRadialGradient(W / 2, avgY, 0, W / 2, avgY, avgR);
         avgGrad.addColorStop(0, avgC1);
         avgGrad.addColorStop(1, avgC2);
-
-        // グローリング
         ctx.beginPath();
         ctx.arc(W / 2, avgY, avgR + 4, 0, Math.PI * 2);
         ctx.fillStyle = avgC1;
         ctx.globalAlpha = 0.25;
         ctx.fill();
         ctx.globalAlpha = 1;
-
-        // 丸バッジ
         ctx.beginPath();
         ctx.arc(W / 2, avgY, avgR, 0, Math.PI * 2);
         ctx.fillStyle = avgGrad;
@@ -181,63 +186,44 @@ export function RatingShareCard({
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 2;
         ctx.stroke();
-
-        // スコアテキスト
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 26px monospace';
-        ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(avgScore.toFixed(1), W / 2, avgY);
         ctx.textBaseline = 'alphabetic';
-
-        // ラベル
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.font = 'bold 10px monospace';
         ctx.fillText('MY AVERAGE', W / 2, avgY + avgR + 18);
 
-        // ====== 選手リスト ======
+        // 選手リスト
         const listStartY = avgY + avgR + 40;
         const rowH = 38;
         const maxDisplay = Math.min(playerRatings.length, 14);
-        const listPadding = 45;
-
         playerRatings.slice(0, maxDisplay).forEach((p, i) => {
             const y = listStartY + i * rowH;
-
-            // 行背景（交互）
             if (i % 2 === 0) {
-                drawRoundRect(ctx, listPadding, y - 14, W - listPadding * 2, rowH - 2, 6);
+                drawRoundRect(ctx, 45, y - 14, W - 90, rowH - 2, 6);
                 ctx.fillStyle = 'rgba(255,255,255,0.04)';
                 ctx.fill();
             }
-
-            // 背番号バッジ
-            drawRoundRect(ctx, listPadding + 8, y - 8, 28, 20, 4);
+            drawRoundRect(ctx, 53, y - 8, 28, 20, 4);
             ctx.fillStyle = 'rgba(255,255,255,0.08)';
             ctx.fill();
             ctx.fillStyle = 'rgba(255,255,255,0.5)';
             ctx.font = 'bold 11px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(`${p.number}`, listPadding + 22, y + 5);
-
-            // 名前
+            ctx.fillText(`${p.number}`, 67, y + 5);
             ctx.fillStyle = '#EEEEEE';
             ctx.font = '13px monospace';
             ctx.textAlign = 'left';
             const name = p.name.length > 18 ? p.name.slice(0, 16) + '..' : p.name;
-            ctx.fillText(name, listPadding + 45, y + 5);
-
-            // ポジション
+            ctx.fillText(name, 90, y + 5);
             ctx.fillStyle = 'rgba(255,255,255,0.35)';
             ctx.font = '10px monospace';
-            ctx.fillText(p.position, listPadding + 290, y + 5);
-
-            // スコアバッジ（色分け）
-            const scoreX = W - listPadding - 30;
-            const scoreW = 48;
-            const scoreH = 24;
+            ctx.fillText(p.position, 335, y + 5);
+            const scoreX = W - 75;
             const sColor = getScoreColor(p.score);
-            drawRoundRect(ctx, scoreX - scoreW / 2, y - scoreH / 2 + 2, scoreW, scoreH, 6);
+            drawRoundRect(ctx, scoreX - 24, y - 12 + 2, 48, 24, 6);
             ctx.fillStyle = sColor;
             ctx.globalAlpha = 0.15;
             ctx.fill();
@@ -245,21 +231,19 @@ export function RatingShareCard({
             ctx.strokeStyle = sColor;
             ctx.lineWidth = 1.5;
             ctx.stroke();
-
             ctx.fillStyle = sColor;
             ctx.font = 'bold 15px monospace';
             ctx.textAlign = 'center';
             ctx.fillText(p.score.toFixed(1), scoreX, y + 7);
         });
 
-        // ====== フッター ======
+        // フッター
         const footerY = listStartY + maxDisplay * rowH + 28;
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
         ctx.font = '10px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('pixelhub.fan  ●  Made with ♥ and pixels', W / 2, footerY);
 
-        // ボトムバー
         const bottomBarGrad = ctx.createLinearGradient(0, 0, W, 0);
         bottomBarGrad.addColorStop(0, 'transparent');
         bottomBarGrad.addColorStop(0.2, team.colors.accent);
@@ -273,48 +257,239 @@ export function RatingShareCard({
         ctx.shadowBlur = 0;
     }, [matchTitle, matchDate, competition, resultText, playerRatings, team, avgScore]);
 
-    // show時に自動描画
+    // ====== フォーメーション図 Canvas ======
+    const drawFormationCard = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !formationPlayers) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const W = 640;
+        const H = 800;
+        canvas.width = W;
+        canvas.height = H;
+
+        // 背景
+        const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+        bgGrad.addColorStop(0, team.colors.primary);
+        bgGrad.addColorStop(0.3, '#0a0a14');
+        bgGrad.addColorStop(1, team.colors.secondary);
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, W, H);
+        drawPixelDots(ctx, W, H, team.colors.accent, 0.06);
+
+        // トップバー
+        const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+        barGrad.addColorStop(0, 'transparent');
+        barGrad.addColorStop(0.2, team.colors.accent);
+        barGrad.addColorStop(0.8, team.colors.accent);
+        barGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(0, 0, W, 4);
+
+        // ヘッダー
+        ctx.fillStyle = team.colors.accent;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`━━  ${team.name.toUpperCase()} PIXEL HUB  ━━`, W / 2, 26);
+
+        // 対戦カード
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText(matchTitle, W / 2, 52);
+        ctx.font = 'bold 28px monospace';
+        ctx.fillText(resultText, W / 2, 82);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '10px monospace';
+        ctx.fillText(`${competition} • ${new Date(matchDate).toLocaleDateString('ja-JP')} • ${formation || '4-3-3'}`, W / 2, 100);
+
+        // ====== ピッチ ======
+        const pitchX = 40;
+        const pitchY = 115;
+        const pitchW = W - 80;
+        const pitchH = 480;
+
+        // ピッチ背景
+        const pitchGrad = ctx.createLinearGradient(pitchX, pitchY, pitchX, pitchY + pitchH);
+        pitchGrad.addColorStop(0, '#2d8c3a');
+        pitchGrad.addColorStop(0.5, '#248a32');
+        pitchGrad.addColorStop(1, '#2d8c3a');
+        drawRoundRect(ctx, pitchX, pitchY, pitchW, pitchH, 12);
+        ctx.fillStyle = pitchGrad;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // ピッチライン
+        const cx = pitchX + pitchW / 2;
+        const cy = pitchY + pitchH / 2;
+        // ハーフライン
+        ctx.beginPath();
+        ctx.moveTo(pitchX + 10, cy);
+        ctx.lineTo(pitchX + pitchW - 10, cy);
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // センターサークル
+        ctx.beginPath();
+        ctx.arc(cx, cy, 35, 0, Math.PI * 2);
+        ctx.stroke();
+        // ペナルティエリア(上)
+        drawRoundRect(ctx, cx - 50, pitchY, 100, 35, 0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.stroke();
+        // ペナルティエリア(下)
+        drawRoundRect(ctx, cx - 50, pitchY + pitchH - 35, 100, 35, 0);
+        ctx.stroke();
+
+        // 選手をピッチ上に配置
+        formationPlayers.forEach(fp => {
+            const px = pitchX + (fp.x / 100) * pitchW;
+            const py = pitchY + (fp.y / 100) * pitchH;
+
+            // 丸アイコン
+            ctx.beginPath();
+            ctx.arc(px, py, 16, 0, Math.PI * 2);
+            ctx.fillStyle = team.colors.primary;
+            ctx.fill();
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 背番号
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${fp.number}`, px, py);
+            ctx.textBaseline = 'alphabetic';
+
+            // 名前ラベル
+            const shortName = fp.name.split(' ').pop() || fp.name;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '9px monospace';
+            ctx.fillText(shortName.slice(0, 10), px, py + 26);
+
+            // スコアバッジ（あれば）
+            if (fp.score !== null) {
+                const sColor = getScoreColor(fp.score);
+                drawRoundRect(ctx, px + 8, py - 22, 28, 16, 4);
+                ctx.fillStyle = sColor;
+                ctx.globalAlpha = 0.85;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 10px monospace';
+                ctx.fillText(fp.score.toFixed(1), px + 22, py - 11);
+            }
+        });
+
+        // ====== 下部情報 ======
+        const infoY = pitchY + pitchH + 20;
+
+        // 左: チームチーム評価
+        const ratedPlayers = formationPlayers.filter(fp => fp.score !== null);
+        const teamAvg = ratedPlayers.length > 0
+            ? ratedPlayers.reduce((s, p) => s + (p.score || 0), 0) / ratedPlayers.length
+            : 0;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('TEAM RATING', pitchX + 10, infoY);
+        const [tc1] = getScoreGradient(teamAvg);
+        ctx.fillStyle = tc1;
+        ctx.font = 'bold 28px monospace';
+        ctx.fillText(teamAvg.toFixed(1), pitchX + 10, infoY + 32);
+
+        // 中央: My MVP
+        if (myMvp) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('⭐ MY MVP', cx, infoY);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText(`#${myMvp.number} ${myMvp.name.split(' ').pop()}`, cx, infoY + 20);
+            ctx.fillStyle = getScoreColor(myMvp.score);
+            ctx.font = 'bold 20px monospace';
+            ctx.fillText(myMvp.score.toFixed(1), cx, infoY + 44);
+        }
+
+        // 右: 評価者名
+        if (userName) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText('RATED BY', pitchX + pitchW - 10, infoY);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 13px monospace';
+            ctx.fillText(userName, pitchX + pitchW - 10, infoY + 20);
+        }
+
+        // フッター
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('pixelhub.fan  ●  Made with ♥ and pixels', W / 2, H - 18);
+
+        // ボトムバー
+        const bottomBarGrad = ctx.createLinearGradient(0, 0, W, 0);
+        bottomBarGrad.addColorStop(0, 'transparent');
+        bottomBarGrad.addColorStop(0.2, team.colors.accent);
+        bottomBarGrad.addColorStop(0.8, team.colors.accent);
+        bottomBarGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = bottomBarGrad;
+        ctx.fillRect(0, H - 3, W, 3);
+    }, [matchTitle, matchDate, competition, resultText, formationPlayers, formation, team, userName, myMvp]);
+
+    const drawCard = useCallback(() => {
+        if (shareTab === 'formation' && formationPlayers) {
+            drawFormationCard();
+        } else {
+            drawListCard();
+        }
+    }, [shareTab, formationPlayers, drawFormationCard, drawListCard]);
+
     useEffect(() => {
         if (show) {
             setTimeout(drawCard, 100);
         }
-    }, [show, drawCard]);
+    }, [show, drawCard, shareTab]);
 
     const handleDownload = useCallback(async () => {
         drawCard();
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        // モバイル: Web Share APIで写真フォルダに保存可能
+        const fileName = `pixelhub-${team.shortName.toLowerCase()}-${shareTab === 'formation' ? 'formation' : 'ratings'}-${new Date().toISOString().slice(0, 10)}.png`;
+
         if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
             try {
                 const blob = await new Promise<Blob>((resolve) =>
                     canvas.toBlob((b) => resolve(b!), 'image/png')
                 );
-                const file = new File([blob], `pixelhub-${team.shortName.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.png`, {
-                    type: 'image/png',
-                });
+                const file = new File([blob], fileName, { type: 'image/png' });
                 if (navigator.canShare({ files: [file] })) {
                     await navigator.share({
                         files: [file],
-                        title: `${team.name} PIXEL HUB - 採点カード`,
+                        title: `${team.name} PIXEL HUB - ${shareTab === 'formation' ? 'フォーメーション' : '採点カード'}`,
                     });
                     showPixelToast('共有しました！📸');
                     return;
                 }
             } catch (e: any) {
-                // ユーザーがキャンセルした場合はスルー
                 if (e?.name === 'AbortError') return;
             }
         }
 
-        // フォールバック: 通常ダウンロード
         const link = document.createElement('a');
-        link.download = `pixelhub-${team.shortName.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.png`;
+        link.download = fileName;
         link.href = canvas.toDataURL('image/png');
         link.click();
         showPixelToast('画像を保存しました！📸');
-    }, [drawCard, team]);
+    }, [drawCard, team, shareTab]);
 
     const handleCopyText = useCallback(() => {
         const lines = [
@@ -337,6 +512,8 @@ export function RatingShareCard({
         });
     }, [team, matchTitle, competition, matchDate, resultText, playerRatings, avgScore]);
 
+    const hasFormation = formationPlayers && formationPlayers.length > 0;
+
     return (
         <AnimatePresence>
             {show && (
@@ -348,7 +525,7 @@ export function RatingShareCard({
                     onClick={onClose}
                 >
                     <motion.div
-                        className="rounded-2xl border overflow-hidden max-w-md w-full"
+                        className="rounded-2xl border overflow-hidden max-w-md w-full max-h-[90vh] overflow-y-auto"
                         initial={{ scale: 0.85, y: 30 }}
                         animate={{ scale: 1, y: 0 }}
                         exit={{ scale: 0.85, y: 30 }}
@@ -359,7 +536,7 @@ export function RatingShareCard({
                             borderColor: `${team.colors.accent}33`,
                         }}
                     >
-                        {/* ヘッダー — チームカラーグラデーション */}
+                        {/* ヘッダー */}
                         <div
                             className="flex items-center justify-between p-4 border-b"
                             style={{
@@ -382,6 +559,34 @@ export function RatingShareCard({
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
+
+                        {/* シェアタイプ切替タブ */}
+                        {hasFormation && (
+                            <div className="flex p-2 gap-1" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                <button
+                                    onClick={() => setShareTab('list')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                        shareTab === 'list'
+                                            ? 'bg-white/10 text-white border border-white/20'
+                                            : 'text-gray-400 hover:text-white'
+                                    }`}
+                                    style={{ fontFamily: 'monospace' }}
+                                >
+                                    📊 レーティング一覧
+                                </button>
+                                <button
+                                    onClick={() => setShareTab('formation')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                        shareTab === 'formation'
+                                            ? 'bg-white/10 text-white border border-white/20'
+                                            : 'text-gray-400 hover:text-white'
+                                    }`}
+                                    style={{ fontFamily: 'monospace' }}
+                                >
+                                    ⚽ フォーメーション図
+                                </button>
+                            </div>
+                        )}
 
                         {/* 平均スコアハイライト */}
                         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${team.colors.accent}22` }}>

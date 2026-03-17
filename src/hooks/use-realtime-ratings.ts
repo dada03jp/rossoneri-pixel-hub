@@ -342,11 +342,25 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
         };
     }, [matchId, fetchAll, mergeInsert, mergeUpdate]);
 
+    // ======== ユーザー個別スコア取得 ========
+    const getUserRatings = useCallback((userId: string): Record<string, number> => {
+        const result: Record<string, number> = {};
+        // comments からユーザーのスコアを取り出す
+        for (const [playerId, playerComments] of Object.entries(comments)) {
+            const userComment = playerComments.find(c => c.userId === userId);
+            if (userComment) {
+                result[playerId] = userComment.score;
+            }
+        }
+        return result;
+    }, [comments]);
+
     return {
         ratings,
         comments,
         isConnected,
         refresh: fetchAll,
         optimisticSubmit,
+        getUserRatings,
     };
 }

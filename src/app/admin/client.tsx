@@ -196,7 +196,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
 
     // ========== ラインナップ管理 ==========
     const [selectedMatchId, setSelectedMatchId] = useState<string>('');
-    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number }>>({});
+    const [lineup, setLineup] = useState<Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number; positionCol: number }>>({});
     const [loadingLineup, setLoadingLineup] = useState(false);
     const [selectedFormation, setSelectedFormation] = useState('4-3-3');
     const [templates, setTemplates] = useState<{ id: string; name: string; formation_type: string; positions: any[] }[]>([]);
@@ -218,7 +218,8 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .select('*')
             .eq('match_id', matchId);
 
-        const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number }> = {};
+        const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number; positionCol: number }> = {};
+        const sideToCol: Record<string, number> = { 'Left': 1, 'Center': 3, 'Right': 5 };
         activePlayers.forEach(p => {
             const existing = data?.find((ml: any) => ml.player_id === p.id);
             newLineup[p.id] = {
@@ -227,6 +228,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                 role: existing?.role || existing?.position_role || p.position || 'MF',
                 positionSide: existing?.position_side || 'Center',
                 positionRow: existing?.position_row || (({ 'GK': 1, 'DF': 2, 'CB': 2, 'WB': 3, 'DM': 3, 'CM': 4, 'MF': 4, 'AM': 4, 'FW': 5, 'ST': 5 } as Record<string, number>)[existing?.role || p.position || 'MF'] || 3),
+                positionCol: existing?.position_col ?? sideToCol[existing?.position_side || 'Center'] ?? 3,
             };
         });
         setLineup(newLineup);
@@ -261,6 +263,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .map(([playerId, v]) => {
                 const player = activePlayers.find(p => p.id === playerId);
                 const detailedRole = v.role || player?.position || 'MF';
+                const colToSide: Record<number, string> = { 1: 'Left', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'Right' };
                 return {
                     match_id: selectedMatchId,
                     player_id: playerId,
@@ -269,8 +272,9 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                     is_starter: v.isStarter,
                     position_role: detailedToLegacy[detailedRole] || 'MF',
                     role: detailedRole,
-                    position_side: v.positionSide || 'Center',
+                    position_side: colToSide[v.positionCol] || v.positionSide || 'Center',
                     position_row: v.positionRow || 3,
+                    position_col: v.positionCol || 3,
                 };
             });
 
@@ -740,22 +744,9 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                             if (!player) return null;
                                             const row = v.positionRow || roleToRow[v.role] || 3;
                                             const y = rowYMap[row] ?? 50;
-                                            // X calculation
-                                            let x = 50;
-                                            if (v.positionSide === 'Left') x = row === 3 ? 12 : 18;
-                                            else if (v.positionSide === 'Right') x = row === 3 ? 88 : 82;
-                                            else {
-                                                const centersInRow = starterEntries.filter(([_, sv]) => {
-                                                    const sRow = sv.positionRow || roleToRow[sv.role] || 3;
-                                                    return sRow === row && sv.positionSide === 'Center';
-                                                });
-                                                const idx = centersInRow.findIndex(([id]) => id === pid);
-                                                const count = Math.max(centersInRow.length, 1);
-                                                if (count > 1) {
-                                                    const spread = count <= 2 ? 28 : 22;
-                                                    x = 50 - ((count - 1) * spread) / 2 + idx * spread;
-                                                }
-                                            }
+                                            // X calculation: position_col があればそれを使う
+                                            const colXMap: Record<number, number> = { 1: 12, 2: 30, 3: 50, 4: 70, 5: 88 };
+                                            const x = colXMap[v.positionCol] ?? 50;
                                             return (
                                                 <div key={pid} className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style={{ left: `${x}%`, top: `${y}%` }}>
                                                     <div className="w-5 h-5 bg-red-600 border border-white rounded-full flex items-center justify-center text-[8px] text-white font-bold">
@@ -782,7 +773,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                         checked={lineup[player.id]?.selected || false}
                                                         onChange={e => setLineup(prev => ({
                                                             ...prev,
-                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked, role: prev[player.id]?.role || player.position || 'MF', positionSide: prev[player.id]?.positionSide || 'Center', positionRow: prev[player.id]?.positionRow || 3 }
+                                                            [player.id]: { isStarter: prev[player.id]?.isStarter ?? true, selected: e.target.checked, role: prev[player.id]?.role || player.position || 'MF', positionSide: prev[player.id]?.positionSide || 'Center', positionRow: prev[player.id]?.positionRow || 3, positionCol: prev[player.id]?.positionCol || 3 }
                                                         }))}
                                                         className="w-5 h-5 rounded"
                                                     />
@@ -835,16 +826,18 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                                         <option value={5}>Row5 (FW)</option>
                                                                     </select>
                                                                     <select
-                                                                        value={lineup[player.id]?.positionSide || 'Center'}
+                                                                        value={lineup[player.id]?.positionCol || 3}
                                                                         onChange={e => setLineup(prev => ({
                                                                             ...prev,
-                                                                            [player.id]: { ...prev[player.id], positionSide: e.target.value }
+                                                                            [player.id]: { ...prev[player.id], positionCol: Number(e.target.value), positionSide: ({ 1: 'Left', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'Right' } as Record<number, string>)[Number(e.target.value)] || 'Center' }
                                                                         }))}
                                                                         className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
                                                                     >
-                                                                        <option value="Left">左</option>
-                                                                        <option value="Center">中</option>
-                                                                        <option value="Right">右</option>
+                                                                        <option value={1}>Col1 (左)</option>
+                                                                        <option value={2}>Col2 (左寄)</option>
+                                                                        <option value={3}>Col3 (中央)</option>
+                                                                        <option value={4}>Col4 (右寄)</option>
+                                                                        <option value={5}>Col5 (右)</option>
                                                                     </select>
                                                                 </>
                                                             )}
