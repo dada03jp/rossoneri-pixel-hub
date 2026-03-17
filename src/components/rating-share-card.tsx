@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Check, X, Star, Sparkles, Share2 } from 'lucide-react';
 import { useTeam } from '@/contexts/team-context';
 import { showPixelToast } from '@/components/pixel-effects';
+import type { PixelConfig } from '@/components/pixel-player';
 
 interface PlayerRatingEntry {
     name: string;
@@ -20,6 +21,7 @@ interface FormationPlayer {
     score: number | null;
     x: number; // 0-100
     y: number; // 0-100
+    pixel_config?: PixelConfig | null;
 }
 
 interface RatingShareCardProps {
@@ -74,6 +76,74 @@ function drawRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
+}
+
+// Canvas上にPixelPlayerのドット絵を描画
+const PIXEL_SKIN: Record<string, string> = { light: '#FFD5B8', medium: '#D4A574', dark: '#8B5A2B' };
+const PIXEL_HAIR: Record<string, string> = { black: '#1A1A1A', brown: '#5C4033', blonde: '#DAA520' };
+const PIXEL_BASE = [
+  [0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0],
+  [0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0],
+  [0,0,0,0,2,1,1,1,1,1,1,2,0,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,0,1,6,1,1,1,6,1,1,0,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,0,0,1,1,7,1,1,1,0,0,0,0,0],
+  [0,0,0,0,3,4,3,4,3,4,3,4,0,0,0,0],
+  [0,0,0,3,4,3,4,3,4,3,4,3,4,0,0,0],
+  [0,0,1,3,4,3,4,3,4,3,4,3,4,1,0,0],
+  [0,0,1,3,4,3,4,3,4,3,4,3,4,1,0,0],
+  [0,0,0,3,4,3,4,3,4,3,4,3,4,0,0,0],
+  [0,0,0,0,5,5,5,5,5,5,5,5,0,0,0,0],
+  [0,0,0,0,5,5,5,0,0,5,5,5,0,0,0,0],
+  [0,0,0,0,1,1,1,0,0,1,1,1,0,0,0,0],
+  [0,0,0,0,4,4,4,0,0,4,4,4,0,0,0,0],
+];
+const PIXEL_HAIR_STYLES: Record<string, number[][]> = {
+  short: [[0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0],[0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0],[0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0]],
+  medium: [[0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0],[0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0],[0,0,0,2,2,0,0,0,0,0,0,2,2,0,0,0]],
+  bald: [[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],[0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0]],
+  afro: [[0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0],[0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0],[0,0,2,2,2,0,0,0,0,0,0,2,2,2,0,0]],
+};
+
+function drawPixelPlayerOnCanvas(
+    ctx: CanvasRenderingContext2D,
+    cx: number, cy: number,
+    pixelSize: number,
+    config: PixelConfig,
+    kitPrimary: string, kitSecondary: string
+) {
+    const skinColor = PIXEL_SKIN[config.skinTone] || '#D4A574';
+    const hairColor = PIXEL_HAIR[config.hairColor] || '#1A1A1A';
+    const grid = PIXEL_BASE.map((row, ri) => {
+        if (ri < 3) return PIXEL_HAIR_STYLES[config.hairStyle]?.[ri] || row;
+        return row;
+    });
+    const getColor = (v: number): string | null => {
+        switch (v) {
+            case 0: return null;
+            case 1: return skinColor;
+            case 2: return hairColor;
+            case 3: return kitPrimary;
+            case 4: return kitSecondary;
+            case 5: return '#FFFFFF';
+            case 6: return '#1A1A1A';
+            case 7: return '#CC0000';
+            default: return null;
+        }
+    };
+    const totalSize = 16 * pixelSize;
+    const startX = cx - totalSize / 2;
+    const startY = cy - totalSize / 2;
+    for (let row = 0; row < 16; row++) {
+        for (let col = 0; col < 16; col++) {
+            const color = getColor(grid[row][col]);
+            if (color) {
+                ctx.fillStyle = color;
+                ctx.fillRect(startX + col * pixelSize, startY + row * pixelSize, pixelSize, pixelSize);
+            }
+        }
+    }
 }
 
 export function RatingShareCard({
@@ -371,76 +441,78 @@ export function RatingShareCard({
             : null;
 
         // 選手をピッチ上に配置
+        const pixelUnit = 2.5; // 各ドット2.5px → 16*2.5 = 40px のドットアイコン
         effectivePlayers.forEach(fp => {
             const px = pitchX + (fp.x / 100) * pitchW;
             const py = pitchY + (fp.y / 100) * pitchH;
             const isMvp = mvpPlayer && fp.id === mvpPlayer.id;
-            const radius = isMvp ? 20 : 16;
+            const iconHalf = 16 * pixelUnit / 2; // 20px
 
             // MVP: ゴールドグロー
             if (isMvp) {
                 ctx.beginPath();
-                ctx.arc(px, py, radius + 6, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(250,204,21,0.3)';
+                ctx.arc(px, py, iconHalf + 8, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(250,204,21,0.35)';
                 ctx.fill();
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 3;
+                ctx.stroke();
                 // ⭐マーク
                 ctx.fillStyle = '#fbbf24';
-                ctx.font = 'bold 12px sans-serif';
+                ctx.font = 'bold 14px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('⭐', px, py - radius - 6);
+                ctx.fillText('⭐', px, py - iconHalf - 8);
             }
 
-            // 丸アイコン（ユニフォーム風）
-            const iconGrad = ctx.createRadialGradient(px - 3, py - 3, 0, px, py, radius);
-            iconGrad.addColorStop(0, isMvp ? '#fbbf24' : team.colors.primary);
-            iconGrad.addColorStop(1, isMvp ? '#f59e0b' : team.colors.secondary || '#111');
-            ctx.beginPath();
-            ctx.arc(px, py, radius, 0, Math.PI * 2);
-            ctx.fillStyle = iconGrad;
-            ctx.fill();
+            // PixelPlayer ドットアイコン描画
+            if (fp.pixel_config) {
+                drawPixelPlayerOnCanvas(ctx, px, py, pixelUnit, fp.pixel_config, team.colors.primary, team.colors.secondary || '#000');
+            } else {
+                // フォールバック: 丸アイコン＋背番号
+                ctx.beginPath();
+                ctx.arc(px, py, 18, 0, Math.PI * 2);
+                ctx.fillStyle = team.colors.primary;
+                ctx.fill();
+                ctx.strokeStyle = '#FFF';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = '#FFF';
+                ctx.font = 'bold 12px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${fp.number}`, px, py);
+                ctx.textBaseline = 'alphabetic';
+            }
 
-            // リング
-            ctx.strokeStyle = isMvp ? '#fbbf24' : '#FFFFFF';
-            ctx.lineWidth = isMvp ? 3 : 2;
-            ctx.stroke();
-
-            // 背番号
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = `bold ${isMvp ? 13 : 11}px monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`${fp.number}`, px, py);
-            ctx.textBaseline = 'alphabetic';
-
-            // 名前ラベル（背景付き）
+            // 名前ラベル（背景付き、大きめ）
             const shortName = fp.name.split(' ').pop() || fp.name;
-            const labelText = shortName.slice(0, 10);
-            const labelWidth = ctx.measureText(labelText).width + 8;
-            const labelY = py + radius + 6;
-            drawRoundRect(ctx, px - labelWidth / 2, labelY - 6, labelWidth, 14, 3);
-            ctx.fillStyle = isMvp ? 'rgba(250,204,21,0.9)' : 'rgba(0,0,0,0.8)';
+            const labelText = shortName.slice(0, 8);
+            ctx.font = `bold 11px monospace`;
+            const labelWidth = ctx.measureText(labelText).width + 10;
+            const labelY = py + iconHalf + 4;
+            drawRoundRect(ctx, px - labelWidth / 2, labelY - 2, labelWidth, 16, 4);
+            ctx.fillStyle = isMvp ? 'rgba(250,204,21,0.95)' : 'rgba(0,0,0,0.85)';
             ctx.fill();
             ctx.fillStyle = isMvp ? '#000' : '#FFF';
-            ctx.font = `${isMvp ? 'bold' : ''} 9px monospace`.trim();
             ctx.textAlign = 'center';
-            ctx.fillText(labelText, px, labelY + 4);
+            ctx.fillText(labelText, px, labelY + 11);
 
-            // スコアバッジ（あれば）
+            // スコアバッジ（大きめ）
             if (fp.score !== null) {
                 const sColor = getScoreColor(fp.score);
-                const badgeX = px + radius - 2;
-                const badgeY = py - radius + 2;
-                drawRoundRect(ctx, badgeX - 2, badgeY - 8, 30, 16, 4);
+                const badgeW = 34;
+                const badgeH = 18;
+                const badgeX = px + iconHalf - 6;
+                const badgeY = py - iconHalf - 4;
+                drawRoundRect(ctx, badgeX - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 5);
                 ctx.fillStyle = isMvp ? '#fbbf24' : sColor;
-                ctx.globalAlpha = 0.9;
                 ctx.fill();
-                ctx.globalAlpha = 1;
-                ctx.strokeStyle = isMvp ? '#f59e0b' : 'rgba(255,255,255,0.5)';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = isMvp ? '#f59e0b' : 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 1.5;
                 ctx.stroke();
                 ctx.fillStyle = isMvp ? '#000' : '#FFF';
-                ctx.font = 'bold 10px monospace';
-                ctx.fillText(fp.score.toFixed(1), badgeX + 13, badgeY + 4);
+                ctx.font = 'bold 12px monospace';
+                ctx.fillText(fp.score.toFixed(1), badgeX, badgeY + 5);
             }
         });
 
