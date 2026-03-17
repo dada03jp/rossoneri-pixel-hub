@@ -695,23 +695,23 @@ export function MatchDetailClient({
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 group cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-0 group cursor-pointer transition-transform hover:scale-110 active:scale-95"
                                                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
-                                                    <div className="relative flex items-center justify-center w-[40px] h-[40px] sm:w-[56px] sm:h-[56px]">
+                                                    <div className="relative flex items-center justify-center w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]">
                                                         {player.pixel_config && (
-                                                            <div className="w-[40px] h-[40px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
+                                                            <div className="w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
                                                                 <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
                                                             </div>
                                                         )}
                                                         {playerRating && (
-                                                            <span className="absolute -bottom-1 -right-1 bg-white text-[8px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black">
+                                                            <span className="absolute -bottom-0.5 -right-0.5 sm:-bottom-1 sm:-right-1 bg-white text-[7px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black leading-tight">
                                                                 {playerRating.average.toFixed(1)}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span className="text-[8px] sm:text-[10px] font-medium text-white bg-black/60 px-0.5 sm:px-1 py-0.5 rounded whitespace-nowrap">
+                                                    <span className="text-[7px] sm:text-[10px] font-medium text-white bg-black/70 px-0.5 sm:px-1 py-px sm:py-0.5 rounded max-w-[48px] sm:max-w-none truncate text-center leading-tight">
                                                         {player.name.split(' ').pop()}
                                                     </span>
                                                 </div>

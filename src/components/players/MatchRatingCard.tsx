@@ -8,7 +8,7 @@ import { Send } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { PixelBurst, RatingSuccessPopup, AnimatedCounter, showPixelToast } from '@/components/pixel-effects';
+import { PixelBurst, RatingSuccessPopup, AnimatedCounter, showPixelToast, EmojiCrackerBurst } from '@/components/pixel-effects';
 import { useTeam } from '@/contexts/team-context';
 
 interface ProcessedComment {
@@ -79,6 +79,7 @@ export function MatchRatingCard({
     const [hasSubmitted, setHasSubmitted] = useState(false);
     // 数値インクリメントでエフェクト再トリガー (boolean だとリセット問題が起きる)
     const [burstCount, setBurstCount] = useState(0);
+    const [emojiBurstCount, setEmojiBurstCount] = useState(0);
     const [showPopup, setShowPopup] = useState(false);
     const { team: teamConfig } = useTeam();
 
@@ -92,6 +93,7 @@ export function MatchRatingCard({
             setHasSubmitted(true);
             // エフェクト発火: カウントをインクリメント
             setBurstCount(prev => prev + 1);
+            setEmojiBurstCount(prev => prev + 1);
             setShowPopup(true);
             setComment('');
             showPixelToast(`${name} に ${sliderValue.toFixed(1)} を投稿しました`);
@@ -185,7 +187,7 @@ export function MatchRatingCard({
                             className="text-xs h-8"
                             onClick={(e) => e.stopPropagation()}
                         />
-                        <motion.div whileTap={{ scale: 0.9 }}>
+                        <motion.div whileTap={{ scale: 0.9 }} className="relative">
                             <Button
                                 size="sm"
                                 onClick={handleSubmit}
@@ -194,6 +196,7 @@ export function MatchRatingCard({
                             >
                                 {isSubmitting ? '...' : hasSubmitted ? '✓' : <Send className="w-3 h-3" />}
                             </Button>
+                            <EmojiCrackerBurst trigger={emojiBurstCount} score={sliderValue} />
                         </motion.div>
                     </div>
                 </div>

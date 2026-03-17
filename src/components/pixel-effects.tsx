@@ -349,3 +349,98 @@ export function PixelEmptyState({
         </div>
     );
 }
+
+// ======== EmojiCrackerBurst: 採点送信時の絵文字クラッカー ========
+
+function getScoreEmojis(score: number): string[] {
+    if (score >= 9) return ['🔥', '⭐', '🏆', '💎', '✨', '🎉', '👑'];
+    if (score >= 7) return ['⚽', '👏', '🎯', '💪', '✨', '🙌', '🎉'];
+    if (score >= 5) return ['🤔', '😐', '⚽', '📊', '🔄', '😶', '🫤'];
+    return ['💀', '😬', '😤', '👎', '🗑️', '😵', '💩'];
+}
+
+interface EmojiParticle {
+    id: number;
+    emoji: string;
+    angle: number;
+    distance: number;
+    scale: number;
+    rotation: number;
+    delay: number;
+}
+
+interface EmojiCrackerBurstProps {
+    trigger: number;
+    score: number;
+}
+
+export function EmojiCrackerBurst({ trigger, score }: EmojiCrackerBurstProps) {
+    const [particles, setParticles] = useState<EmojiParticle[]>([]);
+
+    useEffect(() => {
+        if (trigger === 0) return;
+
+        const emojis = getScoreEmojis(score);
+        const count = 14;
+        const newParticles: EmojiParticle[] = [];
+
+        for (let i = 0; i < count; i++) {
+            // クラッカー型: 上方向を中心に扇状に広がる (-150° ~ -30°)
+            const baseAngle = -Math.PI * 0.83 + (Math.PI * 0.67 * i) / count;
+            const angle = baseAngle + (Math.random() - 0.5) * 0.4;
+            newParticles.push({
+                id: i,
+                emoji: emojis[i % emojis.length],
+                angle,
+                distance: 50 + Math.random() * 80,
+                scale: 0.7 + Math.random() * 0.6,
+                rotation: (Math.random() - 0.5) * 360,
+                delay: Math.random() * 0.15,
+            });
+        }
+        setParticles(newParticles);
+
+        const timer = setTimeout(() => setParticles([]), 1800);
+        return () => clearTimeout(timer);
+    }, [trigger, score]);
+
+    if (particles.length === 0) return null;
+
+    return (
+        <div className="absolute inset-0 pointer-events-none z-50" style={{ overflow: 'visible' }}>
+            {particles.map((p) => {
+                const tx = Math.cos(p.angle) * p.distance;
+                const ty = Math.sin(p.angle) * p.distance;
+                return (
+                    <motion.span
+                        key={`${trigger}-emoji-${p.id}`}
+                        initial={{
+                            x: '50%',
+                            y: '50%',
+                            opacity: 1,
+                            scale: 0,
+                            rotate: 0,
+                        }}
+                        animate={{
+                            x: `calc(50% + ${tx}px)`,
+                            y: `calc(50% + ${ty}px)`,
+                            opacity: 0,
+                            scale: p.scale,
+                            rotate: p.rotation,
+                        }}
+                        transition={{
+                            duration: 1.2,
+                            ease: [0.16, 1, 0.3, 1],
+                            delay: p.delay,
+                            opacity: { duration: 0.8, delay: p.delay + 0.6 },
+                        }}
+                        className="absolute"
+                        style={{ fontSize: '18px', lineHeight: 1 }}
+                    >
+                        {p.emoji}
+                    </motion.span>
+                );
+            })}
+        </div>
+    );
+}
