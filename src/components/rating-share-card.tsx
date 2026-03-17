@@ -364,45 +364,83 @@ export function RatingShareCard({
         drawRoundRect(ctx, cx - 50, pitchY + pitchH - 35, 100, 35, 0);
         ctx.stroke();
 
+        // MVP特定
+        const scoredPlayers = effectivePlayers.filter(fp => fp.score !== null);
+        const mvpPlayer = scoredPlayers.length > 0
+            ? scoredPlayers.reduce((best, cur) => (cur.score! > best.score! ? cur : best))
+            : null;
+
         // 選手をピッチ上に配置
         effectivePlayers.forEach(fp => {
             const px = pitchX + (fp.x / 100) * pitchW;
             const py = pitchY + (fp.y / 100) * pitchH;
+            const isMvp = mvpPlayer && fp.id === mvpPlayer.id;
+            const radius = isMvp ? 20 : 16;
 
-            // 丸アイコン
+            // MVP: ゴールドグロー
+            if (isMvp) {
+                ctx.beginPath();
+                ctx.arc(px, py, radius + 6, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(250,204,21,0.3)';
+                ctx.fill();
+                // ⭐マーク
+                ctx.fillStyle = '#fbbf24';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('⭐', px, py - radius - 6);
+            }
+
+            // 丸アイコン（ユニフォーム風）
+            const iconGrad = ctx.createRadialGradient(px - 3, py - 3, 0, px, py, radius);
+            iconGrad.addColorStop(0, isMvp ? '#fbbf24' : team.colors.primary);
+            iconGrad.addColorStop(1, isMvp ? '#f59e0b' : team.colors.secondary || '#111');
             ctx.beginPath();
-            ctx.arc(px, py, 16, 0, Math.PI * 2);
-            ctx.fillStyle = team.colors.primary;
+            ctx.arc(px, py, radius, 0, Math.PI * 2);
+            ctx.fillStyle = iconGrad;
             ctx.fill();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
+
+            // リング
+            ctx.strokeStyle = isMvp ? '#fbbf24' : '#FFFFFF';
+            ctx.lineWidth = isMvp ? 3 : 2;
             ctx.stroke();
 
             // 背番号
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 11px monospace';
+            ctx.font = `bold ${isMvp ? 13 : 11}px monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(`${fp.number}`, px, py);
             ctx.textBaseline = 'alphabetic';
 
-            // 名前ラベル
+            // 名前ラベル（背景付き）
             const shortName = fp.name.split(' ').pop() || fp.name;
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '9px monospace';
-            ctx.fillText(shortName.slice(0, 10), px, py + 26);
+            const labelText = shortName.slice(0, 10);
+            const labelWidth = ctx.measureText(labelText).width + 8;
+            const labelY = py + radius + 6;
+            drawRoundRect(ctx, px - labelWidth / 2, labelY - 6, labelWidth, 14, 3);
+            ctx.fillStyle = isMvp ? 'rgba(250,204,21,0.9)' : 'rgba(0,0,0,0.8)';
+            ctx.fill();
+            ctx.fillStyle = isMvp ? '#000' : '#FFF';
+            ctx.font = `${isMvp ? 'bold' : ''} 9px monospace`.trim();
+            ctx.textAlign = 'center';
+            ctx.fillText(labelText, px, labelY + 4);
 
             // スコアバッジ（あれば）
             if (fp.score !== null) {
                 const sColor = getScoreColor(fp.score);
-                drawRoundRect(ctx, px + 8, py - 22, 28, 16, 4);
-                ctx.fillStyle = sColor;
-                ctx.globalAlpha = 0.85;
+                const badgeX = px + radius - 2;
+                const badgeY = py - radius + 2;
+                drawRoundRect(ctx, badgeX - 2, badgeY - 8, 30, 16, 4);
+                ctx.fillStyle = isMvp ? '#fbbf24' : sColor;
+                ctx.globalAlpha = 0.9;
                 ctx.fill();
                 ctx.globalAlpha = 1;
-                ctx.fillStyle = '#FFFFFF';
+                ctx.strokeStyle = isMvp ? '#f59e0b' : 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = isMvp ? '#000' : '#FFF';
                 ctx.font = 'bold 10px monospace';
-                ctx.fillText(fp.score.toFixed(1), px + 22, py - 11);
+                ctx.fillText(fp.score.toFixed(1), badgeX + 13, badgeY + 4);
             }
         });
 

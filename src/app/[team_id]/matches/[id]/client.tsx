@@ -39,7 +39,7 @@ interface PitchPlayer {
     __positionCol?: number;
 }
 
-// フォーメーション座標計算ヘルパー（position_row + position_col + role + side 対応）
+// フォーメーション座標計算ヘルパー（5段階 side: FarLeft/Left/Center/Right/FarRight 対応）
 function getFormationPosition(
     role: string,
     side: string,
@@ -65,25 +65,27 @@ function getFormationPosition(
 
     // --- X座標: position_col があれば直接変換 ---
     if (positionCol && positionCol >= 1 && positionCol <= 5) {
-        const colXMap: Record<number, number> = { 1: 12, 2: 30, 3: 50, 4: 70, 5: 88 };
+        const colXMap: Record<number, number> = { 1: 10, 2: 28, 3: 50, 4: 72, 5: 90 };
         return { x: colXMap[positionCol] ?? 50, y };
     }
 
-    // --- X座標: フォールバック（side ベース + 同 row 内での分散） ---
+    // --- X座標: 5段階 side 値に対応 ---
+    const sideXMap: Record<string, number> = {
+        FarLeft: 10,
+        Left: 28,
+        Center: 50,
+        Right: 72,
+        FarRight: 90,
+    };
+    if (sideXMap[side] !== undefined) {
+        return { x: sideXMap[side], y };
+    }
+
+    // --- フォールバック: 同行のCenter選手を等間隔で分散 ---
     const sameRow = allStarters.filter(p => {
         const pRow = p.__positionRow || roleToRow[p.__role] || 3;
         return pRow === effectiveRow;
     });
-
-    if (side === 'Left') {
-        const xOffset = effectiveRow === 3 ? 12 : effectiveRow === 2 ? 16 : 20;
-        return { x: xOffset, y };
-    }
-    if (side === 'Right') {
-        const xOffset = effectiveRow === 3 ? 88 : effectiveRow === 2 ? 84 : 80;
-        return { x: xOffset, y };
-    }
-
     const centersInRow = sameRow.filter(p => {
         const pSide = p.__side || 'Center';
         return pSide === 'Center';
@@ -91,9 +93,13 @@ function getFormationPosition(
     const idx = centersInRow.findIndex(p => p.id === playerId);
     const count = Math.max(centersInRow.length, 1);
     if (count === 1) return { x: 50, y };
-    const maxSpread = count <= 2 ? 30 : 24;
-    const startX = 50 - ((count - 1) * maxSpread) / 2;
-    return { x: startX + idx * maxSpread, y };
+    // 8%〜92% の範囲内で等間隔配置（はみ出し防止）
+    const minX = 10;
+    const maxX = 90;
+    const spacing = Math.min(20, (maxX - minX) / Math.max(count - 1, 1));
+    const totalWidth = spacing * (count - 1);
+    const startX = 50 - totalWidth / 2;
+    return { x: startX + idx * spacing, y };
 }
 
 export function MatchDetailClient({
@@ -745,29 +751,29 @@ export function MatchDetailClient({
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className={`absolute transform -translate-x-1/2 flex flex-col items-center group cursor-pointer transition-transform hover:scale-110 active:scale-95 ${isMvp ? 'z-10' : ''}`}
-                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -60%)' }}
+                                                    className={`absolute flex flex-col items-center group cursor-pointer transition-transform hover:scale-110 active:scale-95 ${isMvp ? 'z-10' : 'z-0'}`}
+                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
                                                     {/* MVP 王冠 */}
                                                     {isMvp && (
-                                                        <span className="text-[10px] sm:text-sm leading-none mb-[-2px]">⭐</span>
+                                                        <span className="text-[8px] sm:text-xs leading-none">⭐</span>
                                                     )}
-                                                    {/* アイコン */}
-                                                    <div className={`relative flex items-center justify-center w-[36px] h-[36px] sm:w-[56px] sm:h-[56px] ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
+                                                    {/* アイコン — モバイル28px / デスクトップ48px */}
+                                                    <div className={`relative flex items-center justify-center w-7 h-7 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
                                                         {player.pixel_config && (
-                                                            <div className="w-[36px] h-[36px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
-                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
+                                                            <div className="w-7 h-7 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
+                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
                                                             </div>
                                                         )}
                                                     </div>
                                                     {/* 名前ラベル — アイコンの下 */}
-                                                    <span className={`mt-0.5 text-[9px] sm:text-[11px] font-semibold px-1.5 py-0.5 rounded text-center leading-tight shadow-sm max-w-[56px] sm:max-w-none truncate ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}>
+                                                    <span className={`text-[8px] sm:text-[11px] font-semibold px-1 py-px rounded text-center leading-none max-w-[44px] sm:max-w-[72px] truncate ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}>
                                                         {player.name.split(' ').pop()}
                                                     </span>
                                                     {/* スコアバッジ — 名前の下 */}
                                                     {playerRating && (
-                                                        <span className={`mt-px text-[9px] sm:text-[11px] font-bold px-1 py-px rounded leading-tight ${
+                                                        <span className={`text-[8px] sm:text-[11px] font-bold px-1 py-px rounded leading-none ${
                                                             isMvp
                                                                 ? 'bg-yellow-400 text-black border border-yellow-500'
                                                                 : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
@@ -967,19 +973,24 @@ export function MatchDetailClient({
                         let x: number;
                         if (lu.position_col && lu.position_col >= 1 && lu.position_col <= 5) {
                             x = colXMap[lu.position_col];
-                        } else if (lu.position_side === 'Left') {
-                            x = row === 3 ? 12 : 16;
-                        } else if (lu.position_side === 'Right') {
-                            x = row === 3 ? 88 : 84;
                         } else {
-                            const centersInRow = pitchData.filter(pd => {
-                                const pRow = pd.__positionRow || roleToRow[pd.__role] || 3;
-                                return pRow === row && pd.__side === 'Center';
-                            });
-                            const idx = centersInRow.findIndex(pd => pd.id === lu.player_id);
-                            const count = Math.max(centersInRow.length, 1);
-                            if (count === 1) { x = 50; }
-                            else { x = 50 - ((count - 1) * 24) / 2 + idx * 24; }
+                            // 5段階side値に対応
+                            const sideXMap: Record<string, number> = { FarLeft: 10, Left: 28, Center: 50, Right: 72, FarRight: 90 };
+                            if (lu.position_side && sideXMap[lu.position_side] !== undefined) {
+                                x = sideXMap[lu.position_side];
+                            } else {
+                                const centersInRow = pitchData.filter(pd => {
+                                    const pRow = pd.__positionRow || roleToRow[pd.__role] || 3;
+                                    return pRow === row && (!pd.__side || pd.__side === 'Center');
+                                });
+                                const idx = centersInRow.findIndex(pd => pd.id === lu.player_id);
+                                const count = Math.max(centersInRow.length, 1);
+                                if (count === 1) { x = 50; }
+                                else {
+                                    const spacing = Math.min(20, 80 / Math.max(count - 1, 1));
+                                    x = 50 - (spacing * (count - 1)) / 2 + idx * spacing;
+                                }
+                            }
                         }
                         const myScore = userRatings[lu.player_id || ''];
                         return {

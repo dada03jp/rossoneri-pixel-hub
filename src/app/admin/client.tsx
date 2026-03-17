@@ -219,7 +219,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .eq('match_id', matchId);
 
         const newLineup: Record<string, { selected: boolean; isStarter: boolean; role: string; positionSide: string; positionRow: number; positionCol: number }> = {};
-        const sideToCol: Record<string, number> = { 'Left': 1, 'Center': 3, 'Right': 5 };
+        const sideToCol: Record<string, number> = { 'FarLeft': 1, 'Left': 2, 'Center': 3, 'Right': 4, 'FarRight': 5 };
         activePlayers.forEach(p => {
             const existing = data?.find((ml: any) => ml.player_id === p.id);
             newLineup[p.id] = {
@@ -263,7 +263,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             .map(([playerId, v]) => {
                 const player = activePlayers.find(p => p.id === playerId);
                 const detailedRole = v.role || player?.position || 'MF';
-                const colToSide: Record<number, string> = { 1: 'Left', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'Right' };
+                const colToSide: Record<number, string> = { 1: 'FarLeft', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'FarRight' };
                 return {
                     match_id: selectedMatchId,
                     player_id: playerId,
@@ -830,7 +830,7 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                                                                         value={lineup[player.id]?.positionCol || 3}
                                                                         onChange={e => setLineup(prev => ({
                                                                             ...prev,
-                                                                            [player.id]: { ...prev[player.id], positionCol: Number(e.target.value), positionSide: ({ 1: 'Left', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'Right' } as Record<number, string>)[Number(e.target.value)] || 'Center' }
+                                                                            [player.id]: { ...prev[player.id], positionCol: Number(e.target.value), positionSide: ({ 1: 'FarLeft', 2: 'Left', 3: 'Center', 4: 'Right', 5: 'FarRight' } as Record<number, string>)[Number(e.target.value)] || 'Center' }
                                                                         }))}
                                                                         className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
                                                                     >
