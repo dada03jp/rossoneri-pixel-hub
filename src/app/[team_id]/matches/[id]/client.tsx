@@ -749,46 +749,50 @@ export function MatchDetailClient({
                                                 : (myRatings[player.id] ? { average: myRatings[player.id], count: 1 } : null);
                                             const isMvp = player.id === mvpId;
                                             // ★ 根本修正: z-indexをY座標の逆数に設定
-                                            // ピッチ上部(y小)の選手ほどz-indexが高い → 名前ラベルが下の行のアイコンに隠れない
                                             const dynamicZ = Math.round(100 - pos.y) + (isMvp ? 50 : 0);
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className="absolute flex flex-col items-center group cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                                                    className="absolute group cursor-pointer transition-transform hover:scale-110 active:scale-95"
                                                     style={{
                                                         left: `${pos.x}%`,
                                                         top: `${pos.y}%`,
-                                                        transform: 'translate(-50%, -40%)',
+                                                        transform: 'translate(-50%, -50%)',
                                                         zIndex: dynamicZ,
                                                     }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
-                                                    {/* MVP 王冠 */}
-                                                    {isMvp && (
-                                                        <span className="text-[8px] sm:text-xs leading-none">⭐</span>
-                                                    )}
-                                                    {/* アイコン — モバイル28px / デスクトップ48px */}
-                                                    <div className={`relative flex-shrink-0 flex items-center justify-center w-7 h-7 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
-                                                        {player.pixel_config && (
-                                                            <div className="w-7 h-7 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
-                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
-                                                            </div>
+                                                    {/* アイコンコンテナ — サイズ固定でtranslateの基準に */}
+                                                    <div className="relative">
+                                                        {/* MVP 王冠 — アイコンの上 */}
+                                                        {isMvp && (
+                                                            <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] sm:text-xs leading-none">⭐</span>
+                                                        )}
+                                                        {/* アイコン — モバイル28px / デスクトップ48px */}
+                                                        <div className={`w-7 h-7 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
+                                                            {player.pixel_config && (
+                                                                <div className="w-7 h-7 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
+                                                                    <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {/* 名前ラベル — アイコンの完全下に absolute 配置 */}
+                                                        <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] sm:text-[11px] font-bold px-1 py-px rounded text-center leading-none ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}
+                                                            style={{ top: '100%', marginTop: '1px' }}>
+                                                            {player.name.split(' ').pop()?.slice(0, 6) || ''}
+                                                        </span>
+                                                        {/* スコアバッジ — 名前のさらに下 */}
+                                                        {playerRating && (
+                                                            <span className={`absolute left-1/2 -translate-x-1/2 text-[8px] sm:text-[11px] font-bold px-1 py-px rounded leading-none ${
+                                                                isMvp
+                                                                    ? 'bg-yellow-400 text-black border border-yellow-500'
+                                                                    : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
+                                                            }`}
+                                                                style={{ top: '100%', marginTop: '14px' }}>
+                                                                {playerRating.average.toFixed(1)}
+                                                            </span>
                                                         )}
                                                     </div>
-                                                    {/* 名前ラベル — アイコンのすぐ下 */}
-                                                    <span className={`block text-[8px] sm:text-[11px] font-bold px-1 py-px rounded text-center leading-none whitespace-nowrap ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}>
-                                                        {player.name.split(' ').pop()?.slice(0, 6) || ''}
-                                                    </span>
-                                                    {/* スコアバッジ — 名前の下 */}
-                                                    {playerRating && (
-                                                        <span className={`text-[8px] sm:text-[11px] font-bold px-1 py-px rounded leading-none ${
-                                                            isMvp
-                                                                ? 'bg-yellow-400 text-black border border-yellow-500'
-                                                                : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
-                                                        }`}>
-                                                            {playerRating.average.toFixed(1)}
-                                                        </span>
-                                                    )}
                                                 </div>
                                             );
                                         });
