@@ -274,7 +274,8 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
                     role: detailedRole,
                     position_side: colToSide[v.positionCol] || v.positionSide || 'Center',
                     position_row: v.positionRow || 3,
-                    position_col: v.positionCol || 3,
+                    // position_col は DB カラム追加後に有効化:
+                    // position_col: v.positionCol || 3,
                 };
             });
 

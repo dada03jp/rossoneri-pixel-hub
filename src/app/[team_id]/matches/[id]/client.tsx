@@ -722,6 +722,18 @@ export function MatchDetailClient({
                                             self.findIndex(sp => sp.id === p.id) === i
                                         );
 
+                                        // 最高評価選手を特定
+                                        const allRatingsForMvp = uniquePitchPlayers.map(p => {
+                                            const myR = user ? getUserRatings(user.id) : {};
+                                            const pr = ratingViewMode === 'all'
+                                                ? (ratings[p.id] ? ratings[p.id].average : null)
+                                                : (myR[p.id] ?? null);
+                                            return { id: p.id, score: pr };
+                                        }).filter(r => r.score !== null);
+                                        const mvpId = allRatingsForMvp.length > 0
+                                            ? allRatingsForMvp.reduce((best, cur) => (cur.score! > best.score! ? cur : best)).id
+                                            : null;
+
                                         return uniquePitchPlayers.map(player => {
                                             const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow, player.__positionCol);
                                             // ratingViewMode に応じてスコアを切り替え
@@ -729,28 +741,40 @@ export function MatchDetailClient({
                                             const playerRating = ratingViewMode === 'all'
                                                 ? (ratings[player.id] ? { average: ratings[player.id].average, count: ratings[player.id].count } : null)
                                                 : (myRatings[player.id] ? { average: myRatings[player.id], count: 1 } : null);
+                                            const isMvp = player.id === mvpId;
                                             return (
                                                 <div
                                                     key={player.id}
-                                                    className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-px group cursor-pointer transition-transform hover:scale-110 active:scale-95"
-                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                                                    className={`absolute transform -translate-x-1/2 flex flex-col items-center group cursor-pointer transition-transform hover:scale-110 active:scale-95 ${isMvp ? 'z-10' : ''}`}
+                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -60%)' }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
-                                                    <div className="relative z-0 flex items-center justify-center w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]">
+                                                    {/* MVP 王冠 */}
+                                                    {isMvp && (
+                                                        <span className="text-[10px] sm:text-sm leading-none mb-[-2px]">⭐</span>
+                                                    )}
+                                                    {/* アイコン */}
+                                                    <div className={`relative flex items-center justify-center w-[36px] h-[36px] sm:w-[56px] sm:h-[56px] ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
                                                         {player.pixel_config && (
-                                                            <div className="w-[32px] h-[32px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
+                                                            <div className="w-[36px] h-[36px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
                                                                 <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
                                                             </div>
                                                         )}
-                                                        {playerRating && (
-                                                            <span className="absolute -bottom-0.5 -right-0.5 sm:-bottom-1 sm:-right-1 bg-white text-[7px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black leading-tight z-20">
-                                                                {playerRating.average.toFixed(1)}
-                                                            </span>
-                                                        )}
                                                     </div>
-                                                    <span className="relative z-10 text-[7px] sm:text-[10px] font-medium text-white bg-black/80 px-1 sm:px-1 py-px sm:py-0.5 rounded max-w-[48px] sm:max-w-none truncate text-center leading-tight shadow-sm">
+                                                    {/* 名前ラベル — アイコンの下 */}
+                                                    <span className={`mt-0.5 text-[9px] sm:text-[11px] font-semibold px-1.5 py-0.5 rounded text-center leading-tight shadow-sm max-w-[56px] sm:max-w-none truncate ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}>
                                                         {player.name.split(' ').pop()}
                                                     </span>
+                                                    {/* スコアバッジ — 名前の下 */}
+                                                    {playerRating && (
+                                                        <span className={`mt-px text-[9px] sm:text-[11px] font-bold px-1 py-px rounded leading-tight ${
+                                                            isMvp
+                                                                ? 'bg-yellow-400 text-black border border-yellow-500'
+                                                                : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
+                                                        }`}>
+                                                            {playerRating.average.toFixed(1)}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             );
                                         });

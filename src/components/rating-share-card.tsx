@@ -260,9 +260,30 @@ export function RatingShareCard({
     // ====== フォーメーション図 Canvas ======
     const drawFormationCard = useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !formationPlayers) return;
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+
+        // formationPlayers がない場合、playerRatings からフォールバック生成
+        const effectivePlayers: FormationPlayer[] = (formationPlayers && formationPlayers.length > 0)
+            ? formationPlayers
+            : playerRatings.map((p, i) => {
+                const posRow: Record<string, number> = { GK: 90, DF: 74, MF: 50, FW: 22 };
+                const yBase = posRow[p.position] ?? 50;
+                // 同ポジションの選手を等間隔で横に配置
+                const samePos = playerRatings.filter(pr => pr.position === p.position);
+                const idx = samePos.indexOf(p);
+                const count = samePos.length;
+                const x = count === 1 ? 50 : 15 + (70 / Math.max(count - 1, 1)) * idx;
+                return {
+                    id: `fallback-${i}`,
+                    name: p.name,
+                    number: p.number,
+                    score: p.score,
+                    x,
+                    y: yBase,
+                };
+            });
 
         const W = 640;
         const H = 800;
@@ -344,7 +365,7 @@ export function RatingShareCard({
         ctx.stroke();
 
         // 選手をピッチ上に配置
-        formationPlayers.forEach(fp => {
+        effectivePlayers.forEach(fp => {
             const px = pitchX + (fp.x / 100) * pitchW;
             const py = pitchY + (fp.y / 100) * pitchH;
 
@@ -389,7 +410,7 @@ export function RatingShareCard({
         const infoY = pitchY + pitchH + 20;
 
         // 左: チームチーム評価
-        const ratedPlayers = formationPlayers.filter(fp => fp.score !== null);
+        const ratedPlayers = effectivePlayers.filter(fp => fp.score !== null);
         const teamAvg = ratedPlayers.length > 0
             ? ratedPlayers.reduce((s, p) => s + (p.score || 0), 0) / ratedPlayers.length
             : 0;
@@ -512,7 +533,7 @@ export function RatingShareCard({
         });
     }, [team, matchTitle, competition, matchDate, resultText, playerRatings, avgScore]);
 
-    const hasFormation = formationPlayers && formationPlayers.length > 0;
+    // タブは常に表示
 
     return (
         <AnimatePresence>
@@ -561,32 +582,30 @@ export function RatingShareCard({
                         </div>
 
                         {/* シェアタイプ切替タブ */}
-                        {hasFormation && (
-                            <div className="flex p-2 gap-1" style={{ background: 'rgba(0,0,0,0.3)' }}>
-                                <button
-                                    onClick={() => setShareTab('list')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                        shareTab === 'list'
-                                            ? 'bg-white/10 text-white border border-white/20'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                    style={{ fontFamily: 'monospace' }}
-                                >
-                                    📊 レーティング一覧
-                                </button>
-                                <button
-                                    onClick={() => setShareTab('formation')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                                        shareTab === 'formation'
-                                            ? 'bg-white/10 text-white border border-white/20'
-                                            : 'text-gray-400 hover:text-white'
-                                    }`}
-                                    style={{ fontFamily: 'monospace' }}
-                                >
-                                    ⚽ フォーメーション図
-                                </button>
-                            </div>
-                        )}
+                        <div className="flex p-2 gap-1" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                            <button
+                                onClick={() => setShareTab('list')}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    shareTab === 'list'
+                                        ? 'bg-white/10 text-white border border-white/20'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                                style={{ fontFamily: 'monospace' }}
+                            >
+                                📊 レーティング一覧
+                            </button>
+                            <button
+                                onClick={() => setShareTab('formation')}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    shareTab === 'formation'
+                                        ? 'bg-white/10 text-white border border-white/20'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                                style={{ fontFamily: 'monospace' }}
+                            >
+                                ⚽ フォーメーション図
+                            </button>
+                        </div>
 
                         {/* 平均スコアハイライト */}
                         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${team.colors.accent}22` }}>
