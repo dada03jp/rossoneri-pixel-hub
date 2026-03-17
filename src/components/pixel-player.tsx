@@ -15,6 +15,7 @@ interface PixelPlayerProps {
   size?: number;
   showNumber?: boolean;
   className?: string;
+  kitColors?: { primary: string; secondary: string };
 }
 
 // Color palettes
@@ -79,8 +80,9 @@ export function PixelPlayer({
   config,
   number,
   size = 64,
-  showNumber = true,
-  className = ''
+  showNumber = false,
+  className = '',
+  kitColors
 }: PixelPlayerProps) {
   const pixelSize = size / 16;
   const skinColor = SKIN_COLORS[config.skinTone];
@@ -100,8 +102,8 @@ export function PixelPlayer({
       case 0: return 'transparent';
       case 1: return skinColor;
       case 2: return hairColor;
-      case 3: return '#E30613'; // Milan Red
-      case 4: return '#000000'; // Black
+      case 3: return kitColors?.primary || '#E30613'; // Jersey Primary
+      case 4: return kitColors?.secondary || '#000000'; // Jersey Secondary
       case 5: return '#FFFFFF'; // White
       case 6: return '#1A1A1A'; // Eyes
       case 7: return '#CC0000'; // Mouth

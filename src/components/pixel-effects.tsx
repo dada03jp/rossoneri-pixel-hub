@@ -25,7 +25,7 @@ interface PixelBurstProps {
 export function PixelBurst({
     trigger,
     colors,
-    particleCount = 18,
+    particleCount = 28,
 }: PixelBurstProps) {
     const [particles, setParticles] = useState<Particle[]>([]);
 
@@ -34,22 +34,22 @@ export function PixelBurst({
 
         const newParticles: Particle[] = [];
         for (let i = 0; i < particleCount; i++) {
-            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.6;
-            const speed = 30 + Math.random() * 50;
+            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.8;
+            const speed = 40 + Math.random() * 80;
             newParticles.push({
                 id: i,
-                x: 50 + (Math.random() - 0.5) * 20,
-                y: 50 + (Math.random() - 0.5) * 20,
+                x: 45 + (Math.random() - 0.5) * 30,
+                y: 65 + (Math.random() - 0.5) * 15, // スライダー周辺 (下寄り)
                 vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed - 15,
+                vy: Math.sin(angle) * speed - 25,
                 color: colors[i % 2],
-                size: 3 + Math.floor(Math.random() * 5),
-                life: 500 + Math.random() * 500,
+                size: 4 + Math.floor(Math.random() * 6),
+                life: 600 + Math.random() * 600,
             });
         }
         setParticles(newParticles);
 
-        const timer = setTimeout(() => setParticles([]), 1200);
+        const timer = setTimeout(() => setParticles([]), 1500);
         return () => clearTimeout(timer);
     }, [trigger, colors, particleCount]);
 

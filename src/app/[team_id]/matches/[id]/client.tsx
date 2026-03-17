@@ -117,6 +117,13 @@ export function MatchDetailClient({
     // チーム情報
     const { team: teamConfig } = useTeam();
 
+    // ホーム/アウェーに応じたキットカラー
+    const kitColors = useMemo(() => {
+        return match.is_home
+            ? { primary: teamConfig.kit.home.primary, secondary: teamConfig.kit.home.secondary }
+            : { primary: teamConfig.kit.away.primary, secondary: teamConfig.kit.away.secondary };
+    }, [match.is_home, teamConfig]);
+
     // Get current user and their existing ratings
     useEffect(() => {
         const supabase = createClient();
@@ -601,8 +608,17 @@ export function MatchDetailClient({
                                         };
                                     })()}
                                     onShowComments={() => {
-                                        // 当該選手のカードまでスクロールするなどの処理があれば尚良し
-                                        // 今は単純に表示のみ
+                                        // MVP選手のPlayerCommentModalを開く
+                                        let bestPlayerId = '';
+                                        let bestRating = -1;
+                                        players.forEach(p => {
+                                            const r = ratings[p.id];
+                                            if (r && r.average > bestRating) {
+                                                bestRating = r.average;
+                                                bestPlayerId = p.id;
+                                            }
+                                        });
+                                        if (bestPlayerId) setSelectedPlayerId(bestPlayerId);
                                     }}
                                     totalComments={(() => {
                                         let bestPlayerId = '';
@@ -627,8 +643,8 @@ export function MatchDetailClient({
                                 <h3 className="font-semibold text-lg flex items-center gap-2">
                                     ⚽ フォーメーション{match.formation ? ` (${match.formation})` : ''}
                                 </h3>
-                                <div className="relative w-full aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
-                                    style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)', minHeight: '280px' }}>
+                                <div className="relative w-full aspect-[2/3] sm:aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
+                                    style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)', minHeight: '320px' }}>
                                     {/* Pitch Lines */}
                                     <div className="absolute inset-0">
                                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-white/30 rounded-full" />
@@ -683,19 +699,19 @@ export function MatchDetailClient({
                                                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
-                                                    <div className="relative flex items-center justify-center w-[56px] h-[56px]">
+                                                    <div className="relative flex items-center justify-center w-[40px] h-[40px] sm:w-[56px] sm:h-[56px]">
                                                         {player.pixel_config && (
-                                                            <div style={{ imageRendering: 'pixelated' as any, width: 56, height: 56 }}>
-                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} />
+                                                            <div className="w-[40px] h-[40px] sm:w-[56px] sm:h-[56px]" style={{ imageRendering: 'pixelated' as any }}>
+                                                                <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
                                                             </div>
                                                         )}
                                                         {playerRating && (
-                                                            <span className="absolute -bottom-1 -right-1 bg-white text-[10px] font-bold px-1 rounded border border-black">
+                                                            <span className="absolute -bottom-1 -right-1 bg-white text-[8px] sm:text-[10px] font-bold px-0.5 sm:px-1 rounded border border-black">
                                                                 {playerRating.average.toFixed(1)}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span className="text-[10px] font-medium text-white bg-black/60 px-1 py-0.5 rounded whitespace-nowrap">
+                                                    <span className="text-[8px] sm:text-[10px] font-medium text-white bg-black/60 px-0.5 sm:px-1 py-0.5 rounded whitespace-nowrap">
                                                         {player.name.split(' ').pop()}
                                                     </span>
                                                 </div>

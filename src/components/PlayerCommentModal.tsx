@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Heart, MessageCircle, ArrowUpDown, Send, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Heart, MessageCircle, ArrowUpDown, Send, Trash2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { User } from '@supabase/supabase-js';
+import { PixelHeartBurst, PixelEmptyState } from '@/components/pixel-effects';
 
 // ── Types ──
 interface Reply {
@@ -58,6 +59,8 @@ export function PlayerCommentModal({
     const [submitting, setSubmitting] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const replyInputRef = useRef<HTMLInputElement>(null);
+    const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+    const [heartBurstMap, setHeartBurstMap] = useState<Record<string, number>>({});
 
     // 報告用
     const [reportTarget, setReportTarget] = useState<{ type: 'rating' | 'reply'; id: string } | null>(null);
@@ -169,10 +172,22 @@ export function PlayerCommentModal({
             setComments(prev => prev.map(c => c.id === ratingId
                 ? { ...c, likes_count: c.likes_count - 1, user_has_liked: false } : c));
         } else {
+            // ハートバースト発火
+            setHeartBurstMap(prev => ({ ...prev, [ratingId]: (prev[ratingId] || 0) + 1 }));
             await supabase.from('comment_likes').insert({ rating_id: ratingId, user_id: user.id });
             setComments(prev => prev.map(c => c.id === ratingId
                 ? { ...c, likes_count: c.likes_count + 1, user_has_liked: true } : c));
         }
+    };
+
+    // ── 返信展開トグル ──
+    const toggleReplies = (commentId: string) => {
+        setExpandedReplies(prev => {
+            const next = new Set(prev);
+            if (next.has(commentId)) next.delete(commentId);
+            else next.add(commentId);
+            return next;
+        });
     };
 
     // ── 返信ボタン押下ハンドラ ──
@@ -365,11 +380,10 @@ export function PlayerCommentModal({
                             <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
                         </div>
                     ) : sortedComments.length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                            <MessageCircle className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                            <p className="text-sm">まだコメントはありません</p>
-                            <p className="text-xs mt-1">採点時にコメントを残してみましょう！</p>
-                        </div>
+                        <PixelEmptyState
+                            message="まだコメントはありません"
+                            subMessage="採点時にコメントを残して最初のファンになりましょう！"
+                        />
                     ) : (
                         sortedComments.map(comment => (
                             <div key={comment.id} className="bg-card rounded-lg border-2 border-black p-3 space-y-2" style={{ boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
@@ -389,18 +403,24 @@ export function PlayerCommentModal({
                                     {comment.is_deleted ? '[削除済みのコメントです]' : comment.comment}
                                 </p>
 
-                                {/* Actions */}
+                                {/* Actions — ♡件数 + 💬件数 のコンパクト表示 */}
                                 {!comment.is_deleted && (
                                     <div className="flex items-center gap-3 pt-1">
                                         <button onClick={() => toggleLike(comment.id)}
-                                            className={`flex items-center gap-1 text-xs transition-colors ${comment.user_has_liked ? 'text-red-500 font-bold' : 'text-muted-foreground hover:text-red-500'}`}>
+                                            className={`relative flex items-center gap-1 text-xs transition-colors ${comment.user_has_liked ? 'text-red-500 font-bold' : 'text-muted-foreground hover:text-red-500'}`}>
                                             <Heart className={`w-3.5 h-3.5 ${comment.user_has_liked ? 'fill-current' : ''}`} />
-                                            {comment.likes_count > 0 && comment.likes_count}
+                                            <span>{comment.likes_count || 0}</span>
+                                            <PixelHeartBurst trigger={heartBurstMap[comment.id] || 0} />
                                         </button>
-                                        <button onClick={() => handleReplyClick(comment.id)}
-                                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+                                        <button onClick={() => { toggleReplies(comment.id); if (!expandedReplies.has(comment.id)) handleReplyClick(comment.id); }}
+                                            className={`flex items-center gap-1 text-xs transition-colors ${expandedReplies.has(comment.id) ? 'text-primary font-bold' : 'text-muted-foreground hover:text-primary'}`}>
                                             <MessageCircle className="w-3.5 h-3.5" />
-                                            <span>返信{comment.replies.length > 0 ? ` ${comment.replies.length}` : ''}</span>
+                                            <span>{comment.replies.length || 0}</span>
+                                            {comment.replies.length > 0 && (
+                                                expandedReplies.has(comment.id)
+                                                    ? <ChevronUp className="w-3 h-3" />
+                                                    : <ChevronDown className="w-3 h-3" />
+                                            )}
                                         </button>
                                         {user && (
                                             <div className="ml-auto flex items-center gap-3">
@@ -419,8 +439,8 @@ export function PlayerCommentModal({
                                     </div>
                                 )}
 
-                                {/* ── 返信一覧（フラット・1段インデント） ── */}
-                                {comment.replies.length > 0 && (
+                                {/* ── 返信一覧（💬クリックで展開） ── */}
+                                {expandedReplies.has(comment.id) && comment.replies.length > 0 && (
                                     <div className="ml-6 mt-2 space-y-2 border-l-2 border-black/10 pl-3">
                                         {comment.replies.map(reply => (
                                             <div key={reply.id} className="space-y-0.5">
@@ -431,7 +451,6 @@ export function PlayerCommentModal({
                                                     <span className="text-[10px] text-muted-foreground">{formatTime(reply.created_at)}</span>
                                                     {!reply.is_deleted && user && (
                                                         <div className="ml-auto flex items-center gap-2">
-                                                            {/* 返信への返信ボタン（@メンション付き） */}
                                                             <button onClick={() => handleReplyClick(comment.id, reply.user_name)}
                                                                 className="text-[10px] text-muted-foreground hover:text-primary">返信</button>
                                                             <button onClick={() => setReportTarget({ type: 'reply', id: reply.id })}

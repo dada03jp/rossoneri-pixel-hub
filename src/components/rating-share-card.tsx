@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Share2 } from 'lucide-react';
+import { Download, Copy, Check, X, Star } from 'lucide-react';
 import { useTeam } from '@/contexts/team-context';
+import { showPixelToast } from '@/components/pixel-effects';
 
 interface PlayerRatingEntry {
     name: string;
@@ -13,10 +14,10 @@ interface PlayerRatingEntry {
 }
 
 interface RatingShareCardProps {
-    matchTitle: string;        // e.g. "AC Milan vs Juventus"
+    matchTitle: string;
     matchDate: string;
     competition: string;
-    resultText: string;        // e.g. "2 - 1"
+    resultText: string;
     playerRatings: PlayerRatingEntry[];
     show: boolean;
     onClose: () => void;
@@ -27,6 +28,13 @@ function getScoreColor(score: number): string {
     if (score >= 6) return '#eab308';
     if (score >= 4) return '#f97316';
     return '#ef4444';
+}
+
+function getScoreBg(score: number): string {
+    if (score >= 8) return 'rgba(34,197,94,0.15)';
+    if (score >= 6) return 'rgba(234,179,8,0.1)';
+    if (score >= 4) return 'rgba(249,115,22,0.1)';
+    return 'rgba(239,68,68,0.1)';
 }
 
 export function RatingShareCard({
@@ -40,73 +48,98 @@ export function RatingShareCard({
 }: RatingShareCardProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { team } = useTeam();
+    const [copied, setCopied] = useState(false);
+
+    // 平均スコア
+    const avgScore = playerRatings.length > 0
+        ? playerRatings.reduce((s, p) => s + p.score, 0) / playerRatings.length
+        : 0;
 
     const drawCard = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
         const W = 600;
-        const H = 800;
+        const H = Math.min(850, 240 + playerRatings.length * 36 + 80);
         canvas.width = W;
         canvas.height = H;
 
-        // 背景
-        ctx.fillStyle = '#111111';
+        // 背景グラデーション
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+        bgGrad.addColorStop(0, '#0a0a0a');
+        bgGrad.addColorStop(1, '#1a1a1a');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, W, H);
 
-        // ピクセルグリッド背景
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
-        for (let x = 0; x < W; x += 8) {
-            for (let y = 0; y < H; y += 8) {
-                ctx.fillRect(x + 3, y + 3, 2, 2);
+        // ピクセルドット背景
+        ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        for (let x = 0; x < W; x += 6) {
+            for (let y = 0; y < H; y += 6) {
+                ctx.fillRect(x + 2, y + 2, 2, 2);
             }
         }
 
-        // チームカラーヘッダーストライプ
-        const stripeW = W / 2;
-        ctx.fillStyle = team.colors.primary;
-        ctx.fillRect(0, 0, stripeW, 6);
-        ctx.fillStyle = team.colors.secondary === '#000000' ? team.colors.accent : team.colors.secondary;
-        ctx.fillRect(stripeW, 0, stripeW, 6);
+        // ヘッダーバー（チームカラー）
+        const barGrad = ctx.createLinearGradient(0, 0, W, 0);
+        barGrad.addColorStop(0, team.colors.primary);
+        barGrad.addColorStop(1, team.colors.accent);
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(0, 0, W, 5);
 
         // チーム名
         ctx.fillStyle = team.colors.accent;
-        ctx.font = 'bold 14px monospace';
+        ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${team.name.toUpperCase()} PIXEL HUB`, W / 2, 30);
+        ctx.fillText(`━━━  ${team.name.toUpperCase()} PIXEL HUB  ━━━`, W / 2, 28);
 
-        // タイトル
+        // 対戦カード
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 22px monospace';
-        ctx.fillText(matchTitle, W / 2, 64);
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText(matchTitle, W / 2, 58);
 
-        // サブ情報
-        ctx.fillStyle = '#888888';
-        ctx.font = '13px monospace';
-        ctx.fillText(`${competition} • ${new Date(matchDate).toLocaleDateString('ja-JP')}`, W / 2, 88);
+        // 大会・日付
+        ctx.fillStyle = '#666666';
+        ctx.font = '12px monospace';
+        ctx.fillText(`${competition} • ${new Date(matchDate).toLocaleDateString('ja-JP')}`, W / 2, 78);
 
-        // スコア
+        // スコア（大きく）
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 36px monospace';
-        ctx.fillText(resultText, W / 2, 130);
+        ctx.font = 'bold 42px monospace';
+        ctx.fillText(resultText, W / 2, 125);
+
+        // 平均スコアバッジ
+        const avgY = 155;
+        const badgeW = 180;
+        const badgeH = 32;
+        ctx.fillStyle = getScoreBg(avgScore);
+        const bx = (W - badgeW) / 2;
+        ctx.beginPath();
+        ctx.roundRect(bx, avgY - badgeH / 2, badgeW, badgeH, 6);
+        ctx.fill();
+        ctx.strokeStyle = getScoreColor(avgScore);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#999999';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('MY AVERAGE', W / 2 - 30, avgY + 4);
+
+        ctx.fillStyle = getScoreColor(avgScore);
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText(avgScore.toFixed(1), W / 2 + 55, avgY + 6);
 
         // 区切り
-        ctx.strokeStyle = team.colors.primary;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        ctx.moveTo(40, 150);
-        ctx.lineTo(W - 40, 150);
+        ctx.moveTo(40, 180);
+        ctx.lineTo(W - 40, 180);
         ctx.stroke();
         ctx.setLineDash([]);
-
-        // MY RATINGS タイトル
-        ctx.fillStyle = team.colors.accent;
-        ctx.font = 'bold 14px monospace';
-        ctx.fillText('📋 MY RATINGS', W / 2, 180);
 
         // 選手リスト
         const startY = 200;
@@ -115,145 +148,180 @@ export function RatingShareCard({
 
         playerRatings.slice(0, maxDisplay).forEach((p, i) => {
             const y = startY + i * rowH;
-            const isEven = i % 2 === 0;
 
-            // 行背景
-            if (isEven) {
-                ctx.fillStyle = 'rgba(255,255,255,0.04)';
-                ctx.fillRect(40, y - 12, W - 80, rowH);
+            // 行背景（交互）
+            if (i % 2 === 0) {
+                ctx.fillStyle = 'rgba(255,255,255,0.03)';
+                ctx.fillRect(35, y - 12, W - 70, rowH);
             }
 
             // 背番号
-            ctx.fillStyle = '#666666';
-            ctx.font = 'bold 12px monospace';
+            ctx.fillStyle = '#555555';
+            ctx.font = 'bold 11px monospace';
             ctx.textAlign = 'left';
-            ctx.fillText(`#${p.number}`, 50, y + 6);
+            ctx.fillText(`#${p.number}`, 45, y + 5);
 
             // 名前
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = '#DDDDDD';
             ctx.font = '13px monospace';
-            ctx.textAlign = 'left';
-            const displayName = p.name.length > 20 ? p.name.slice(0, 18) + '..' : p.name;
-            ctx.fillText(displayName, 95, y + 6);
+            const name = p.name.length > 18 ? p.name.slice(0, 16) + '..' : p.name;
+            ctx.fillText(name, 85, y + 5);
 
             // ポジション
-            ctx.fillStyle = '#888888';
+            ctx.fillStyle = '#666666';
             ctx.font = '10px monospace';
-            ctx.textAlign = 'left';
-            ctx.fillText(p.position, 360, y + 6);
+            ctx.fillText(p.position, 340, y + 5);
 
-            // スコア
+            // スコアバッジ
+            const scoreX = W - 70;
+            const scoreW = 44;
+            const scoreH = 22;
+            ctx.fillStyle = getScoreBg(p.score);
+            ctx.beginPath();
+            ctx.roundRect(scoreX - scoreW / 2, y - scoreH / 2 + 2, scoreW, scoreH, 4);
+            ctx.fill();
+
             ctx.fillStyle = getScoreColor(p.score);
-            ctx.font = 'bold 16px monospace';
-            ctx.textAlign = 'right';
-            ctx.fillText(p.score.toFixed(1), W - 50, y + 7);
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(p.score.toFixed(1), scoreX, y + 7);
         });
 
-        // 平均スコア
-        if (playerRatings.length > 0) {
-            const avg = playerRatings.reduce((s, p) => s + p.score, 0) / playerRatings.length;
-            const avgY = startY + maxDisplay * rowH + 20;
-
-            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(40, avgY - 15);
-            ctx.lineTo(W - 40, avgY - 15);
-            ctx.stroke();
-
-            ctx.fillStyle = '#AAAAAA';
-            ctx.font = 'bold 13px monospace';
-            ctx.textAlign = 'left';
-            ctx.fillText('AVERAGE', 50, avgY + 5);
-
-            ctx.fillStyle = getScoreColor(avg);
-            ctx.font = 'bold 22px monospace';
-            ctx.textAlign = 'right';
-            ctx.fillText(avg.toFixed(1), W - 50, avgY + 7);
-        }
-
         // フッター
-        ctx.fillStyle = '#444444';
-        ctx.font = '11px monospace';
+        const footerY = startY + maxDisplay * rowH + 25;
+        ctx.fillStyle = '#333333';
+        ctx.font = '10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('pixelhub.fan • Made with ♥ and pixels', W / 2, H - 20);
+        ctx.fillText('pixelhub.fan ● Made with ♥ and pixels', W / 2, footerY);
 
-        // 下部ストライプ
-        ctx.fillStyle = team.colors.primary;
-        ctx.fillRect(0, H - 6, stripeW, 6);
-        ctx.fillStyle = team.colors.secondary === '#000000' ? team.colors.accent : team.colors.secondary;
-        ctx.fillRect(stripeW, H - 6, stripeW, 6);
-    }, [matchTitle, matchDate, competition, resultText, playerRatings, team]);
+        // 下バー
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(0, H - 4, W, 4);
+    }, [matchTitle, matchDate, competition, resultText, playerRatings, team, avgScore]);
+
+    // show時に自動描画
+    useEffect(() => {
+        if (show) {
+            setTimeout(drawCard, 100);
+        }
+    }, [show, drawCard]);
 
     const handleDownload = useCallback(() => {
         drawCard();
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         const link = document.createElement('a');
-        link.download = `pixelhub-rating-${new Date().toISOString().slice(0, 10)}.png`;
+        link.download = `pixelhub-${team.shortName.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-    }, [drawCard]);
+        showPixelToast('画像を保存しました！');
+    }, [drawCard, team]);
+
+    const handleCopyText = useCallback(() => {
+        const lines = [
+            `🎮 ${team.name} PIXEL HUB`,
+            `⚽ ${matchTitle}`,
+            `📋 ${competition} | ${new Date(matchDate).toLocaleDateString('ja-JP')}`,
+            `🏆 結果: ${resultText}`,
+            '',
+            '📊 MY RATINGS:',
+            ...playerRatings.map(p => `  #${p.number} ${p.name}: ${p.score.toFixed(1)}`),
+            '',
+            `⭐ AVERAGE: ${avgScore.toFixed(1)}`,
+            '',
+            '#PixelHub #サッカー採点',
+        ];
+        navigator.clipboard.writeText(lines.join('\n')).then(() => {
+            setCopied(true);
+            showPixelToast('テキストをコピーしました！');
+            setTimeout(() => setCopied(false), 2000);
+        });
+    }, [team, matchTitle, competition, matchDate, resultText, playerRatings, avgScore]);
 
     return (
         <AnimatePresence>
             {show && (
                 <motion.div
-                    className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     onClick={onClose}
                 >
                     <motion.div
-                        className="bg-gray-900 rounded-xl border-2 border-gray-700 overflow-hidden max-w-lg w-full"
-                        initial={{ scale: 0.8, y: 40 }}
+                        className="bg-gray-950 rounded-2xl border border-gray-800 overflow-hidden max-w-md w-full"
+                        initial={{ scale: 0.85, y: 30 }}
                         animate={{ scale: 1, y: 0 }}
-                        exit={{ scale: 0.8, y: 40 }}
+                        exit={{ scale: 0.85, y: 30 }}
                         onClick={(e) => e.stopPropagation()}
-                        style={{ boxShadow: '6px 6px 0px rgba(0,0,0,0.8)' }}
+                        style={{ boxShadow: '0 25px 50px rgba(0,0,0,0.6)' }}
                     >
-                        {/* プレビュー */}
-                        <div className="p-4 flex justify-center">
+                        {/* ヘッダー */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                            <div className="flex items-center gap-2">
+                                <Star className="w-5 h-5" style={{ color: team.colors.accent }} />
+                                <span className="font-bold text-white text-sm" style={{ fontFamily: 'monospace' }}>
+                                    🎮 マイ採点をシェア！
+                                </span>
+                            </div>
+                            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* 平均スコアハイライト */}
+                        <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between bg-gray-900/50">
+                            <div>
+                                <p className="text-gray-400 text-xs" style={{ fontFamily: 'monospace' }}>平均採点</p>
+                                <p className="text-2xl font-bold" style={{ color: getScoreColor(avgScore), fontFamily: 'monospace' }}>
+                                    {avgScore.toFixed(1)}
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-gray-400 text-xs" style={{ fontFamily: 'monospace' }}>{playerRatings.length}人を評価</p>
+                                <p className="text-gray-300 text-sm font-bold" style={{ fontFamily: 'monospace' }}>{resultText}</p>
+                            </div>
+                        </div>
+
+                        {/* Canvas プレビュー */}
+                        <div className="p-4 flex justify-center bg-black/30">
                             <canvas
                                 ref={canvasRef}
-                                className="w-full max-w-[300px] rounded border border-gray-700"
+                                className="w-full max-w-[280px] rounded-lg border border-gray-800"
                                 style={{ imageRendering: 'pixelated' }}
                             />
                         </div>
 
-                        {/* アクション */}
-                        <div className="p-4 pt-0 flex gap-3">
-                            <button
+                        {/* アクションボタン */}
+                        <div className="p-4 pt-2 flex gap-2">
+                            <motion.button
                                 onClick={handleDownload}
-                                className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-lg border-2 border-black text-sm hover:bg-gray-100 transition-colors"
-                                style={{ boxShadow: '3px 3px 0px rgba(0,0,0,1)' }}
+                                className="flex-1 flex items-center justify-center gap-2 text-black font-bold py-3 rounded-xl text-sm"
+                                style={{
+                                    background: `linear-gradient(135deg, ${team.colors.accent}, ${team.colors.primary})`,
+                                    fontFamily: 'monospace',
+                                    boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                                }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.97 }}
                             >
                                 <Download className="w-4 h-4" />
-                                ダウンロード
-                            </button>
-                            <button
-                                onClick={onClose}
-                                className="px-6 py-3 bg-gray-800 text-gray-300 rounded-lg border border-gray-600 text-sm hover:bg-gray-700 transition-colors"
+                                画像保存
+                            </motion.button>
+                            <motion.button
+                                onClick={handleCopyText}
+                                className="flex items-center justify-center gap-2 px-5 py-3 bg-gray-800 text-gray-200 font-bold rounded-xl text-sm border border-gray-700 hover:bg-gray-700 transition-colors"
+                                style={{ fontFamily: 'monospace' }}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.97 }}
                             >
-                                閉じる
-                            </button>
+                                {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                                {copied ? 'コピー済' : 'テキスト'}
+                            </motion.button>
                         </div>
                     </motion.div>
                 </motion.div>
             )}
         </AnimatePresence>
     );
-}
-
-// 自動描画のためのフック
-export function useShareCard() {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    const triggerDraw = useCallback((drawFn: () => void) => {
-        requestAnimationFrame(drawFn);
-    }, []);
-
-    return { canvasRef, triggerDraw };
 }
