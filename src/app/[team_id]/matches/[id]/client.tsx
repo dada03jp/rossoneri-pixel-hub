@@ -758,7 +758,7 @@ export function MatchDetailClient({
                                                     style={{
                                                         left: `${pos.x}%`,
                                                         top: `${pos.y}%`,
-                                                        transform: 'translate(-50%, -50%)',
+                                                        transform: 'translate(-50%, -40%)',
                                                         zIndex: dynamicZ,
                                                     }}
                                                     onClick={() => setSelectedPlayerId(player.id)}

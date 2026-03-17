@@ -576,12 +576,12 @@ export function RatingShareCard({
     }, [matchTitle, matchDate, competition, resultText, formationPlayers, formation, team, userName, myMvp]);
 
     const drawCard = useCallback(() => {
-        if (shareTab === 'formation' && formationPlayers) {
+        if (shareTab === 'formation') {
             drawFormationCard();
         } else {
             drawListCard();
         }
-    }, [shareTab, formationPlayers, drawFormationCard, drawListCard]);
+    }, [shareTab, drawFormationCard, drawListCard]);
 
     useEffect(() => {
         if (show) {
