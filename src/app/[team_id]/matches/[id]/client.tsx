@@ -752,28 +752,28 @@ export function MatchDetailClient({
                                                 <div
                                                     key={player.id}
                                                     className={`absolute flex flex-col items-center group cursor-pointer transition-transform hover:scale-110 active:scale-95 ${isMvp ? 'z-10' : 'z-0'}`}
-                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)' }}
+                                                    style={{ left: `${pos.x}%`, top: `${pos.y}%`, transform: 'translate(-50%, -50%)', width: 'max-content', maxWidth: '52px' }}
                                                     onClick={() => setSelectedPlayerId(player.id)}
                                                 >
                                                     {/* MVP 王冠 */}
                                                     {isMvp && (
-                                                        <span className="text-[8px] sm:text-xs leading-none">⭐</span>
+                                                        <span className="text-[7px] sm:text-xs leading-none">⭐</span>
                                                     )}
-                                                    {/* アイコン — モバイル28px / デスクトップ48px */}
-                                                    <div className={`relative flex items-center justify-center w-7 h-7 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
+                                                    {/* アイコン — モバイル24px / デスクトップ48px */}
+                                                    <div className={`relative flex-shrink-0 flex items-center justify-center w-6 h-6 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
                                                         {player.pixel_config && (
-                                                            <div className="w-7 h-7 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
+                                                            <div className="w-6 h-6 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
                                                                 <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
                                                             </div>
                                                         )}
                                                     </div>
                                                     {/* 名前ラベル — アイコンの下 */}
-                                                    <span className={`text-[8px] sm:text-[11px] font-semibold px-1 py-px rounded text-center leading-none max-w-[44px] sm:max-w-[72px] truncate ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}>
+                                                    <span className={`block text-[7px] sm:text-[11px] font-semibold px-0.5 py-px rounded text-center leading-none overflow-hidden whitespace-nowrap max-w-[30px] sm:max-w-[72px] ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`} style={{ textOverflow: 'ellipsis' }}>
                                                         {player.name.split(' ').pop()}
                                                     </span>
                                                     {/* スコアバッジ — 名前の下 */}
                                                     {playerRating && (
-                                                        <span className={`text-[8px] sm:text-[11px] font-bold px-1 py-px rounded leading-none ${
+                                                        <span className={`text-[7px] sm:text-[11px] font-bold px-0.5 py-px rounded leading-none ${
                                                             isMvp
                                                                 ? 'bg-yellow-400 text-black border border-yellow-500'
                                                                 : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
