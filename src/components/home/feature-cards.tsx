@@ -7,18 +7,18 @@ interface FeatureCardsProps {
 const features = [
     {
         icon: Star,
-        title: '10点満点で選手採点',
-        description: '試合ごとに全選手をファン目線で評価。あなたの採点が反映されます。',
+        title: 'あなたの声で採点する',
+        description: '10点満点で選手を評価。ファンの目線がそのまま反映される、あなただけの採点結果。',
     },
     {
         icon: MessageSquare,
-        title: 'コメントで感想を残せる',
-        description: '選手ごとに感想や意見をシェア。試合の振り返りがもっと楽しくなります。',
+        title: '試合の余韻を共有する',
+        description: '感じたこと、伝えたいこと。選手ごとに感想を残して、試合体験をもっと深く。',
     },
     {
         icon: Trophy,
-        title: 'みんなの採点でMVPが見える',
-        description: 'ファンの投票結果から、その試合のMVPが分かります。',
+        title: 'ファンが決めるMVP',
+        description: 'メディアの評価ではなく、ファンの採点から生まれるMVP。あなたの一票がMVPを決める。',
     },
 ];
 
