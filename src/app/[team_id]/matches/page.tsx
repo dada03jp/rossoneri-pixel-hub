@@ -34,20 +34,20 @@ function getDisplayStatus(match: { status: string; match_date: string }): 'finis
 }
 
 /**
- * 3区分の相互排他振り分け
- * 異常データ保護: match_date > now かつ status === 'finished' → upcoming に降格
+ * 4区分の相互排他振り分け
+ * anomaly: match_date > now かつ status === 'finished' → 全セクションから除外
  * TODO: 将来的に管理画面で異常データを一覧表示
  */
-function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' {
+function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' | 'anomaly' {
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
 
     if (match.status === 'finished') {
         if (matchTime > now) {
             console.warn(
-                `[ANOMALY] Match ${match.id ?? 'unknown'} (${match.opponent_name ?? ''}) is marked 'finished' but match_date ${match.match_date} is in the future.`
+                `[ANOMALY] Match id=${match.id ?? 'unknown'} opponent=${match.opponent_name ?? ''} match_date=${match.match_date} status=finished — future date with finished status. Excluded from all sections.`
             );
-            return 'upcoming';
+            return 'anomaly';
         }
         return 'finished';
     }

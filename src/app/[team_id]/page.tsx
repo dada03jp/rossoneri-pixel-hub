@@ -52,26 +52,25 @@ async function getPlayers() {
 }
 
 /**
- * 試合を3区分に相互排他的に振り分ける
+ * 試合を4区分に相互排他的に振り分ける
  * - finished: status === 'finished' かつ match_date <= now
  * - pending: status !== 'finished' かつ match_date < now（結果待ち）
  * - upcoming: status !== 'finished' かつ match_date >= now（今後の試合）
+ * - anomaly: match_date > now かつ status === 'finished'（異常データ）
  *
- * 異常データ保護: match_date > now かつ status === 'finished' の場合は
- * 試合結果に混ぜず upcoming として扱い、サーバーログで警告を出す。
+ * anomaly は全セクションから除外される。
  * TODO: 将来的に管理画面のダッシュボードで異常データを一覧表示する
  */
-function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' {
+function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' | 'anomaly' {
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
 
     if (match.status === 'finished') {
         if (matchTime > now) {
-            // 異常データ: 未来日時なのに finished
             console.warn(
-                `[ANOMALY] Match ${match.id ?? 'unknown'} (${match.opponent_name ?? ''}) is marked 'finished' but match_date ${match.match_date} is in the future. Treating as 'upcoming' to prevent display corruption.`
+                `[ANOMALY] Match id=${match.id ?? 'unknown'} opponent=${match.opponent_name ?? ''} match_date=${match.match_date} status=finished — future date with finished status. Excluded from all sections.`
             );
-            return 'upcoming';
+            return 'anomaly';
         }
         return 'finished';
     }
