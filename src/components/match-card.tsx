@@ -11,7 +11,7 @@ type MatchStatus = 'finished' | 'live' | 'upcoming' | 'pending';
 
 interface MatchCardProps {
     id: string;
-    teamId?: string;
+    teamId: string;
     teamName?: string;
     teamKit?: TeamKit;
     opponentName: string;
@@ -25,7 +25,7 @@ interface MatchCardProps {
 
 export function MatchCard({
     id,
-    teamId = 'milan',
+    teamId,
     teamName = 'AC Milan',
     teamKit,
     opponentName,

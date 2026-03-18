@@ -19,10 +19,12 @@ interface MatchesPageProps {
  */
 function getDisplayStatus(match: { status: string; match_date: string }): 'finished' | 'live' | 'upcoming' | 'pending' {
     if (match.status === 'finished') return 'finished';
-    if (match.status === 'live') return 'live';
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
+    // 過去日時の未finished試合は常に「結果待ち」を優先（DB statusがliveでも）
     if (matchTime < now) return 'pending';
+    // 未来日時でDB statusがliveの場合のみLIVE表示
+    if (match.status === 'live') return 'live';
     return 'upcoming';
 }
 
