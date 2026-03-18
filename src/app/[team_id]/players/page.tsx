@@ -22,7 +22,8 @@ export interface PlayerWithStats {
     total_ratings: number;
 }
 
-export default async function PlayersPage() {
+export default async function PlayersPage({ params }: { params: Promise<{ team_id: string }> }) {
+    const { team_id } = await params;
     const supabase = await createClient();
 
     // player_season_stats View から取得
@@ -46,7 +47,7 @@ export default async function PlayersPage() {
             total_ratings: 0,
         }));
 
-        return <PlayersPageClient players={mockPlayers} isUsingMockData={true} />;
+        return <PlayersPageClient players={mockPlayers} isUsingMockData={true} teamId={team_id} />;
     }
 
     const players: PlayerWithStats[] = statsData.map((p: Record<string, unknown>) => ({
@@ -76,5 +77,5 @@ export default async function PlayersPage() {
         }
     }
 
-    return <PlayersPageClient players={uniquePlayers} isUsingMockData={false} />;
+    return <PlayersPageClient players={uniquePlayers} isUsingMockData={false} teamId={team_id} />;
 }

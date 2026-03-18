@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { MatchCard } from '@/components/match-card';
 import { PixelPlayer } from '@/components/pixel-player';
-import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight } from 'lucide-react';
+import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight, Clock } from 'lucide-react';
 import { MOCK_MATCHES, MOCK_PLAYERS } from '@/lib/mock-data';
 import Link from 'next/link';
 import { getTeamConfig } from '@/lib/team-config';
@@ -51,6 +51,32 @@ async function getPlayers() {
     }
 }
 
+/**
+ * 試合を3区分に相互排他的に振り分ける
+ * - finished: status === 'finished'
+ * - pending: status !== 'finished' かつ match_date < now（結果待ち）
+ * - upcoming: status !== 'finished' かつ match_date >= now（今後の試合）
+ */
+function classifyMatch(match: { status: string; match_date: string }): 'finished' | 'pending' | 'upcoming' {
+    if (match.status === 'finished') return 'finished';
+    const matchTime = new Date(match.match_date).getTime();
+    const now = Date.now();
+    return matchTime < now ? 'pending' : 'upcoming';
+}
+
+/**
+ * MatchCard用のstatus propを算出
+ * DB statusを尊重しつつ、UI側で日時照合して破綻防止
+ */
+function getDisplayStatus(match: { status: string; match_date: string }): 'finished' | 'live' | 'upcoming' | 'pending' {
+    if (match.status === 'finished') return 'finished';
+    if (match.status === 'live') return 'live';
+    const matchTime = new Date(match.match_date).getTime();
+    const now = Date.now();
+    if (matchTime < now) return 'pending';
+    return 'upcoming';
+}
+
 export default async function TeamHome({ params }: PageProps) {
     const { team_id } = await params;
     const teamConfig = getTeamConfig(team_id);
@@ -63,16 +89,21 @@ export default async function TeamHome({ params }: PageProps) {
     const players = supabasePlayers || MOCK_PLAYERS;
     const isUsingMockData = !supabaseMatches;
 
-    const upcomingMatches = [...matches]
-        .filter(m => m.status !== 'finished')
-        .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
-
+    // 3区分に相互排他的に振り分け
     const finishedMatches = [...matches]
-        .filter(m => m.status === 'finished')
+        .filter(m => classifyMatch(m) === 'finished')
         .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime());
 
-    const nextMatches = upcomingMatches.slice(0, 4);
+    const pendingMatches = [...matches]
+        .filter(m => classifyMatch(m) === 'pending')
+        .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime());
+
+    const upcomingMatches = [...matches]
+        .filter(m => classifyMatch(m) === 'upcoming')
+        .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+
     const recentResults = finishedMatches.slice(0, 4);
+    const nextMatches = upcomingMatches.slice(0, 4);
     const displayPlayers = players.slice(0, 5);
 
     return (
@@ -164,25 +195,62 @@ export default async function TeamHome({ params }: PageProps) {
                         </Link>
                     )}
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                    {recentResults.map(match => (
-                        <MatchCard
-                            key={match.id}
-                            id={match.id}
-                            teamId={team_id}
-                            teamName={teamConfig.name}
-                            teamKit={teamConfig.kit}
-                            opponentName={match.opponent_name}
-                            matchDate={match.match_date}
-                            homeScore={match.home_score}
-                            awayScore={match.away_score}
-                            isFinished={match.status === 'finished'}
-                            competition={match.competition || 'League'}
-                            isHome={match.is_home ?? true}
-                        />
-                    ))}
-                </div>
+                {recentResults.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {recentResults.map(match => (
+                            <MatchCard
+                                key={match.id}
+                                id={match.id}
+                                teamId={team_id}
+                                teamName={teamConfig.name}
+                                teamKit={teamConfig.kit}
+                                opponentName={match.opponent_name}
+                                matchDate={match.match_date}
+                                homeScore={match.home_score}
+                                awayScore={match.away_score}
+                                status={getDisplayStatus(match)}
+                                competition={match.competition || 'League'}
+                                isHome={match.is_home ?? true}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 bg-muted/30 rounded-lg border border-border">
+                        <Calendar className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
+                        <p className="text-muted-foreground font-medium">まだ試合結果がありません</p>
+                        <p className="text-sm text-muted-foreground/70 mt-1">試合が終了すると、ここに結果が表示されます</p>
+                    </div>
+                )}
             </section>
+
+            {/* Pending Matches (結果待ち) */}
+            {pendingMatches.length > 0 && (
+                <section className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-orange-500" />
+                        <h2 className="text-2xl font-bold">結果待ち</h2>
+                        <span className="text-sm text-muted-foreground">- キックオフ済み・結果反映待ち</span>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {pendingMatches.map(match => (
+                            <MatchCard
+                                key={match.id}
+                                id={match.id}
+                                teamId={team_id}
+                                teamName={teamConfig.name}
+                                teamKit={teamConfig.kit}
+                                opponentName={match.opponent_name}
+                                matchDate={match.match_date}
+                                homeScore={match.home_score}
+                                awayScore={match.away_score}
+                                status={getDisplayStatus(match)}
+                                competition={match.competition || 'League'}
+                                isHome={match.is_home ?? true}
+                            />
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Upcoming Matches */}
             {nextMatches.length > 0 && (
@@ -215,7 +283,7 @@ export default async function TeamHome({ params }: PageProps) {
                                 matchDate={match.match_date}
                                 homeScore={match.home_score}
                                 awayScore={match.away_score}
-                                isFinished={match.status === 'finished'}
+                                status={getDisplayStatus(match)}
                                 competition={match.competition || 'League'}
                                 isHome={match.is_home ?? true}
                             />

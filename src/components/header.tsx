@@ -29,7 +29,6 @@ export function Header() {
         { name: 'Match Ratings', path: `/${teamId}` },
         { name: 'Players', path: `/${teamId}/players` },
         { name: 'My Page', path: `/${teamId}/mypage` },
-        { name: 'About', path: '/about' },
     ];
 
     return (

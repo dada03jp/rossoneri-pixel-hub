@@ -8,6 +8,7 @@ import type { PlayerWithStats } from './page';
 interface PlayersPageClientProps {
     players: PlayerWithStats[];
     isUsingMockData: boolean;
+    teamId: string;
 }
 
 const POSITION_ORDER = ['GK', 'DF', 'MF', 'FW'];
@@ -18,7 +19,7 @@ const POSITION_LABELS: Record<string, string> = {
     'FW': 'フォワード'
 };
 
-export function PlayersPageClient({ players: initialPlayers, isUsingMockData }: PlayersPageClientProps) {
+export function PlayersPageClient({ players: initialPlayers, isUsingMockData, teamId }: PlayersPageClientProps) {
     // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
     const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
     // Group players by position
@@ -72,6 +73,7 @@ export function PlayersPageClient({ players: initialPlayers, isUsingMockData }: 
                                 <PlayerCard
                                     key={player.id}
                                     id={player.id}
+                                    teamId={teamId}
                                     name={player.name}
                                     number={player.number}
                                     position={player.position || ''}

@@ -8,6 +8,7 @@ import Link from 'next/link';
 
 interface PlayerCardProps {
     id: string;
+    teamId: string;
     name: string;
     number: number;
     position: string;
@@ -38,6 +39,7 @@ function getRatingColor(rating: number): string {
 
 export function PlayerCard({
     id,
+    teamId,
     name,
     number,
     position,
@@ -49,7 +51,7 @@ export function PlayerCard({
     assists = 0,
 }: PlayerCardProps) {
     return (
-        <Link href={`/players/${id}`}>
+        <Link href={`/${teamId}/players/${id}`}>
             <motion.div
                 className={cn(
                     'bg-white rounded-lg p-4 cursor-pointer',
@@ -125,7 +127,7 @@ export function PlayerCard({
                         style={{ boxShadow: '2px 2px 0px rgba(0,0,0,0.08)' }}>
                         <span className="text-[10px] text-gray-400 block">⚽ ゴール</span>
                         <span className="text-lg font-bold font-mono leading-none text-gray-700">
-                            {goals}
+                            {appearances > 0 ? goals : '-'}
                         </span>
                     </div>
 
@@ -134,7 +136,7 @@ export function PlayerCard({
                         style={{ boxShadow: '2px 2px 0px rgba(0,0,0,0.08)' }}>
                         <span className="text-[10px] text-gray-400 block">🅰️ アシスト</span>
                         <span className="text-lg font-bold font-mono leading-none text-gray-700">
-                            {assists}
+                            {appearances > 0 ? assists : '-'}
                         </span>
                     </div>
                 </div>

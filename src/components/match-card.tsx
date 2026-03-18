@@ -7,6 +7,8 @@ interface TeamKit {
     away: { primary: string; secondary: string; stripe: boolean };
 }
 
+type MatchStatus = 'finished' | 'live' | 'upcoming' | 'pending';
+
 interface MatchCardProps {
     id: string;
     teamId?: string;
@@ -16,7 +18,7 @@ interface MatchCardProps {
     matchDate: string;
     homeScore: number | null;
     awayScore: number | null;
-    isFinished: boolean;
+    status: MatchStatus;
     competition: string;
     isHome?: boolean;
 }
@@ -30,7 +32,7 @@ export function MatchCard({
     matchDate,
     homeScore,
     awayScore,
-    isFinished,
+    status,
     competition,
     isHome = true,
 }: MatchCardProps) {
@@ -45,6 +47,7 @@ export function MatchCard({
         });
     };
 
+    const isFinished = status === 'finished';
     const myScore = isHome ? homeScore : awayScore;
     const opponentScore = isHome ? awayScore : homeScore;
 
@@ -62,6 +65,33 @@ export function MatchCard({
         return 'DRAW';
     };
 
+    const getStatusBadge = () => {
+        if (status === 'live') {
+            return (
+                <span className="ml-auto flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    LIVE
+                </span>
+            );
+        }
+        if (status === 'pending') {
+            return (
+                <span className="ml-auto flex items-center gap-1.5 text-xs font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-700">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                    結果待ち
+                </span>
+            );
+        }
+        if (getResultLabel()) {
+            return (
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded ${getResultStyle()}`}>
+                    {getResultLabel()}
+                </span>
+            );
+        }
+        return null;
+    };
+
     const opponentColors = getTeamColors(opponentName);
 
     // チームキット色（デフォルトはミランの色）
@@ -74,17 +104,13 @@ export function MatchCard({
     return (
         <Link href={`/${teamId}/matches/${id}`}>
             <div className="group relative bg-card border border-border rounded-lg p-4 hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer">
-                {/* Competition Badge */}
+                {/* Competition Badge + Status */}
                 <div className="flex items-center gap-2 mb-3">
                     <Trophy className="w-4 h-4 text-primary" />
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {competition}
                     </span>
-                    {getResultLabel() && (
-                        <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded ${getResultStyle()}`}>
-                            {getResultLabel()}
-                        </span>
-                    )}
+                    {getStatusBadge()}
                 </div>
 
                 {/* Match Info */}
@@ -126,6 +152,8 @@ export function MatchCard({
                                     {awayScore ?? '-'}
                                 </span>
                             </div>
+                        ) : status === 'pending' ? (
+                            <div className="text-sm font-medium text-orange-600">結果待ち</div>
                         ) : (
                             <div className="text-lg font-medium text-muted-foreground">VS</div>
                         )}
