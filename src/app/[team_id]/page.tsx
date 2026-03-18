@@ -53,14 +53,28 @@ async function getPlayers() {
 
 /**
  * 試合を3区分に相互排他的に振り分ける
- * - finished: status === 'finished'
+ * - finished: status === 'finished' かつ match_date <= now
  * - pending: status !== 'finished' かつ match_date < now（結果待ち）
  * - upcoming: status !== 'finished' かつ match_date >= now（今後の試合）
+ *
+ * 異常データ保護: match_date > now かつ status === 'finished' の場合は
+ * 試合結果に混ぜず upcoming として扱い、サーバーログで警告を出す。
+ * TODO: 将来的に管理画面のダッシュボードで異常データを一覧表示する
  */
-function classifyMatch(match: { status: string; match_date: string }): 'finished' | 'pending' | 'upcoming' {
-    if (match.status === 'finished') return 'finished';
+function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' {
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
+
+    if (match.status === 'finished') {
+        if (matchTime > now) {
+            // 異常データ: 未来日時なのに finished
+            console.warn(
+                `[ANOMALY] Match ${match.id ?? 'unknown'} (${match.opponent_name ?? ''}) is marked 'finished' but match_date ${match.match_date} is in the future. Treating as 'upcoming' to prevent display corruption.`
+            );
+            return 'upcoming';
+        }
+        return 'finished';
+    }
     return matchTime < now ? 'pending' : 'upcoming';
 }
 
@@ -69,9 +83,14 @@ function classifyMatch(match: { status: string; match_date: string }): 'finished
  * DB statusを尊重しつつ、UI側で日時照合して破綻防止
  */
 function getDisplayStatus(match: { status: string; match_date: string }): 'finished' | 'live' | 'upcoming' | 'pending' {
-    if (match.status === 'finished') return 'finished';
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
+
+    if (match.status === 'finished') {
+        // 異常データ保護: 未来日時の finished は upcoming 扱い
+        if (matchTime > now) return 'upcoming';
+        return 'finished';
+    }
     // 過去日時の未finished試合は常に「結果待ち」を優先（DB statusがliveでも）
     if (matchTime < now) return 'pending';
     // 未来日時でDB statusがliveの場合のみLIVE表示

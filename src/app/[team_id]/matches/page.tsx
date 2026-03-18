@@ -18,9 +18,14 @@ interface MatchesPageProps {
  * DB statusを尊重しつつ、UI側で日時照合して破綻防止
  */
 function getDisplayStatus(match: { status: string; match_date: string }): 'finished' | 'live' | 'upcoming' | 'pending' {
-    if (match.status === 'finished') return 'finished';
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
+
+    if (match.status === 'finished') {
+        // 異常データ保護: 未来日時の finished は upcoming 扱い
+        if (matchTime > now) return 'upcoming';
+        return 'finished';
+    }
     // 過去日時の未finished試合は常に「結果待ち」を優先（DB statusがliveでも）
     if (matchTime < now) return 'pending';
     // 未来日時でDB statusがliveの場合のみLIVE表示
@@ -30,11 +35,22 @@ function getDisplayStatus(match: { status: string; match_date: string }): 'finis
 
 /**
  * 3区分の相互排他振り分け
+ * 異常データ保護: match_date > now かつ status === 'finished' → upcoming に降格
+ * TODO: 将来的に管理画面で異常データを一覧表示
  */
-function classifyMatch(match: { status: string; match_date: string }): 'finished' | 'pending' | 'upcoming' {
-    if (match.status === 'finished') return 'finished';
+function classifyMatch(match: { status: string; match_date: string; id?: string; opponent_name?: string }): 'finished' | 'pending' | 'upcoming' {
     const matchTime = new Date(match.match_date).getTime();
     const now = Date.now();
+
+    if (match.status === 'finished') {
+        if (matchTime > now) {
+            console.warn(
+                `[ANOMALY] Match ${match.id ?? 'unknown'} (${match.opponent_name ?? ''}) is marked 'finished' but match_date ${match.match_date} is in the future.`
+            );
+            return 'upcoming';
+        }
+        return 'finished';
+    }
     return matchTime < now ? 'pending' : 'upcoming';
 }
 
