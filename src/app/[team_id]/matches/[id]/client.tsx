@@ -348,21 +348,30 @@ export function MatchDetailClient({
                         </div>
 
                         {/* ── 3. Formation Pitch (main) ── */}
-                        <div>
+                        <div className="relative z-0">
                             <p className="text-xs text-muted-foreground mb-2 text-center">
                                 {match.formation ? `フォーメーション ${match.formation}` : 'フォーメーション'}
                             </p>
-                            <FormationPitch
-                                players={pitchPlayers}
-                                formation={match.formation || '4-3-3'}
-                                ratings={ratings}
-                                userRatings={userScoresMap}
-                                viewMode={ratingViewMode}
-                                mvpPlayerId={mvpPlayerId}
-                                selectedPlayerId={selectedPlayerId}
-                                isHome={match.is_home}
-                                onPlayerSelect={(id) => setSelectedPlayerId(id)}
-                            />
+                            <div className="overflow-clip rounded-[16px]">
+                                <FormationPitch
+                                    players={pitchPlayers}
+                                    formation={match.formation || '4-3-3'}
+                                    ratings={ratings}
+                                    userRatings={userScoresMap}
+                                    viewMode={ratingViewMode}
+                                    mvpPlayerId={mvpPlayerId}
+                                    selectedPlayerId={selectedPlayerId}
+                                    isHome={match.is_home ?? true}
+                                    onPlayerSelect={(id) => setSelectedPlayerId(id)}
+                                />
+                            </div>
+                            {/* Hint text — below pitch, not overlapping */}
+                            {Object.keys(userRatings).length === 0 && (
+                                <p className="text-center text-xs text-muted-foreground mt-3 flex items-center justify-center gap-1.5">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    ピッチ上の選手をタップして採点を始めましょう
+                                </p>
+                            )}
                         </div>
 
                         {/* ── 4. Substitute Chips ── */}
@@ -453,35 +462,50 @@ export function MatchDetailClient({
                     <div>
                         <SectionHeader
                             icon={Star}
-                            title="他の試合も採点する"
+                            title="他の試合も採点してみる？"
                             accentColor={teamConfig.colors.accent}
                         />
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {sortedNearbyMatches.slice(0, 4).map(m => {
                                 const isFinished = m.status === 'finished';
                                 const dateStr = new Date(m.match_date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+                                const opponentName = m.opponent_name;
                                 return (
                                     <Link
                                         key={m.id}
                                         href={`/${teamConfig.id}/matches/${m.id}`}
-                                        className="group flex items-center gap-3 bg-white border border-black/[0.06] rounded-[14px] p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                                        className="group relative bg-white border border-black/[0.06] rounded-[14px] p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg overflow-hidden"
                                     >
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {m.is_home ? teamConfig.name : m.opponent_name} vs {m.is_home ? m.opponent_name : teamConfig.name}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-xs text-muted-foreground">{dateStr}</span>
-                                                {isFinished && m.home_score !== null && (
-                                                    <span className="text-xs font-bold tabular-nums">{m.home_score} - {m.away_score}</span>
+                                        {/* Accent stripe */}
+                                        <div
+                                            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-[14px]"
+                                            style={{ backgroundColor: isFinished ? teamConfig.colors.accent : '#e5e5e5' }}
+                                        />
+                                        <div className="pl-2">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold truncate">vs {opponentName}</p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[11px] text-muted-foreground">{dateStr}</span>
+                                                        <span className="text-[11px] text-muted-foreground">{m.competition}</span>
+                                                    </div>
+                                                </div>
+                                                {isFinished && m.home_score !== null ? (
+                                                    <div className="text-right flex-shrink-0">
+                                                        <p className="text-lg font-bold tabular-nums leading-none">{m.home_score} - {m.away_score}</p>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] text-muted-foreground bg-black/[0.03] px-2 py-0.5 rounded-full flex-shrink-0">予定</span>
                                                 )}
                                             </div>
+                                            {isFinished && (
+                                                <div className="mt-2 flex items-center gap-1">
+                                                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 group-hover:bg-emerald-500/20 transition-colors">
+                                                        採点する →
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <span className={`text-[11px] font-medium px-2 py-1 rounded-full ${
-                                            isFinished ? 'bg-emerald-500/10 text-emerald-600' : 'bg-black/[0.04] text-muted-foreground'
-                                        }`}>
-                                            {isFinished ? '採点する' : '予定'}
-                                        </span>
                                     </Link>
                                 );
                             })}
