@@ -51,10 +51,14 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
     };
 
     const updateMatchStatus = async (matchId: string, status: 'upcoming' | 'live' | 'finished') => {
+        const match = matches.find(m => m.id === matchId);
         const supabase = createClient();
         const updateData: Record<string, unknown> = { status };
         if (status === 'finished') {
             updateData.is_finished = true;
+            // スコアがnullのままfinishedにならないよう、未設定なら0で初期化
+            if (match && match.home_score == null) updateData.home_score = 0;
+            if (match && match.away_score == null) updateData.away_score = 0;
         } else if (status === 'upcoming') {
             updateData.is_finished = false;
         }
@@ -69,7 +73,13 @@ export function AdminClient({ initialMatches, initialPlayers, initialEvents }: A
             return;
         }
 
-        setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status, is_finished: status === 'finished' } as Match : m));
+        setMatches(prev => prev.map(m => m.id === matchId ? {
+            ...m,
+            status,
+            is_finished: status === 'finished',
+            home_score: status === 'finished' ? (m.home_score ?? 0) : m.home_score,
+            away_score: status === 'finished' ? (m.away_score ?? 0) : m.away_score,
+        } as Match : m));
         showMessage('success', `ステータスを「${STATUS_LABELS[status].label}」に変更しました`);
     };
 
