@@ -147,6 +147,22 @@ async function getMatchLineups(matchId: string): Promise<MatchLineup[] | null> {
     }
 }
 
+async function getNearbyMatches(currentMatchId: string) {
+    try {
+        const supabase = await createClient();
+        const { data, error } = await supabase
+            .from('matches')
+            .select('id, opponent_name, match_date, status, home_score, away_score, is_home, competition')
+            .neq('id', currentMatchId)
+            .order('match_date', { ascending: false })
+            .limit(6);
+        if (error) return [];
+        return data || [];
+    } catch {
+        return [];
+    }
+}
+
 export default async function MatchDetailPage({ params }: PageProps) {
     const { team_id, id: matchId } = await params;
 
@@ -156,6 +172,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
     const supabaseRatings = supabaseMatch ? await getRatings(matchId) : null;
     const events = supabaseMatch ? await getMatchEvents(matchId) : null;
     const lineups = supabaseMatch ? await getMatchLineups(matchId) : null;
+    const nearbyMatches = supabaseMatch ? await getNearbyMatches(matchId) : [];
 
     // Use Supabase data or fall back to mock
     const match = supabaseMatch || getMatchById(matchId);
@@ -187,6 +204,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
             isUsingMockData={isUsingMockData}
             events={events || []}
             lineups={lineups || []}
+            nearbyMatches={nearbyMatches}
         />
     );
 }

@@ -66,7 +66,7 @@ export function RankingCard({ title, players, ratings, limit = 5 }: RankingCardP
     }
 
     return (
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-white border border-black/[0.06] rounded-[14px] p-6">
             <div className="flex items-center gap-2 mb-4">
                 <Trophy className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-bold">{title}</h3>
@@ -76,7 +76,7 @@ export function RankingCard({ title, players, ratings, limit = 5 }: RankingCardP
                 {rankedPlayers.map(({ player, average, count, rank }) => (
                     <div
                         key={player.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${rank === 1 ? 'bg-yellow-50 border border-yellow-200' : 'hover:bg-muted/50'
+                        className={`flex items-center gap-3 p-2 rounded-[10px] transition-colors ${rank === 1 ? 'bg-amber-50 border border-amber-200/50' : 'hover:bg-black/[0.02]'
                             }`}
                     >
                         {getRankBadge(rank)}
@@ -153,7 +153,7 @@ export function TopRatedBanner({
     }
 
     return (
-        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl p-4">
+        <div className="bg-gradient-to-r from-amber-50 to-amber-50/50 border border-amber-200/50 rounded-[14px] p-4">
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-yellow-600" />

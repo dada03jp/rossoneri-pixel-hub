@@ -1,22 +1,38 @@
 'use client';
 
 import { BackHeader } from '@/components/header';
-import { MatchRatingCard } from '@/components/players/MatchRatingCard';
-import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
-import { RankingCard, TopRatedBanner } from '@/components/ranking-card';
-import { PlayerCommentModal } from '@/components/PlayerCommentModal';
-import { EventTimeline } from '@/components/event-timeline';
-import { Calendar, Trophy, Users, Star, AlertCircle, LogIn, Wifi, WifiOff, Share2, Download } from 'lucide-react';
+import { PixelConfig } from '@/components/pixel-player';
+import { TopRatedBanner } from '@/components/ranking-card';
+import { RankingCard } from '@/components/ranking-card';
+import { MatchHero } from '@/components/match/match-hero';
+import { FormationPitch, PitchPlayer } from '@/components/match/formation-pitch';
+import { PlayerRatingSheet } from '@/components/match/player-rating-sheet';
+import { SubstituteChips } from '@/components/match/substitute-chips';
+import { SectionHeader } from '@/components/home/section-header';
+import { AlertCircle, LogIn, Wifi, WifiOff, Users, ArrowRight, Star } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { Match, Player, MatchEvent, MatchLineup } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
-import { getTeamColors } from '@/lib/team-colors';
 import { User } from '@supabase/supabase-js';
 import { useRealtimeRatings } from '@/hooks/use-realtime-ratings';
 import { LoginModal } from '@/components/auth/login-modal';
 import { useTeam } from '@/contexts/team-context';
 import { RatingShareCard } from '@/components/rating-share-card';
-import { PixelToastContainer, PixelSkeletonCard, showPixelToast } from '@/components/pixel-effects';
+import { PixelToastContainer } from '@/components/pixel-effects';
+import Link from 'next/link';
+
+// ── Types ──
+
+interface NearbyMatch {
+    id: string;
+    opponent_name: string;
+    match_date: string;
+    status: string;
+    home_score: number | null;
+    away_score: number | null;
+    is_home: boolean;
+    competition: string;
+}
 
 interface MatchDetailClientProps {
     match: Match;
@@ -25,82 +41,10 @@ interface MatchDetailClientProps {
     isUsingMockData: boolean;
     events: MatchEvent[];
     lineups: MatchLineup[];
+    nearbyMatches: NearbyMatch[];
 }
 
-/** フォーメーション図上の選手表現 */
-interface PitchPlayer {
-    id: string;
-    name: string;
-    number: number;
-    pixel_config?: PixelConfig | null;
-    __role: string;
-    __side: string;
-    __positionRow?: number;
-    __positionCol?: number;
-}
-
-// フォーメーション座標計算ヘルパー（5段階 side: FarLeft/Left/Center/Right/FarRight 対応）
-function getFormationPosition(
-    role: string,
-    side: string,
-    formation: string,
-    allStarters: PitchPlayer[],
-    playerId: string,
-    positionRow?: number,
-    positionCol?: number
-): { x: number; y: number } {
-    // --- Y座標: position_row があればそれを使う、なければ role から推定 ---
-    const rowYMap: Record<number, number> = {
-        1: 90,  // GK
-        2: 74,  // DF (CB, WB at DF row)
-        3: 56,  // DM / WB (3-5-2 style)
-        4: 38,  // CM / AM
-        5: 18,  // FW / ST
-    };
-    const roleToRow: Record<string, number> = {
-        GK: 1, CB: 2, DF: 2, WB: 3, DM: 3, CM: 4, MF: 4, AM: 4, ST: 5, FW: 5,
-    };
-    const effectiveRow = positionRow || roleToRow[role] || 3;
-    const y = rowYMap[effectiveRow] ?? 50;
-
-    // --- X座標: position_col があれば直接変換 ---
-    if (positionCol && positionCol >= 1 && positionCol <= 5) {
-        const colXMap: Record<number, number> = { 1: 10, 2: 28, 3: 50, 4: 72, 5: 90 };
-        return { x: colXMap[positionCol] ?? 50, y };
-    }
-
-    // --- X座標: 5段階 side 値に対応 ---
-    const sideXMap: Record<string, number> = {
-        FarLeft: 10,
-        Left: 28,
-        Center: 50,
-        Right: 72,
-        FarRight: 90,
-    };
-    if (sideXMap[side] !== undefined) {
-        return { x: sideXMap[side], y };
-    }
-
-    // --- フォールバック: 同行のCenter選手を等間隔で分散 ---
-    const sameRow = allStarters.filter(p => {
-        const pRow = p.__positionRow || roleToRow[p.__role] || 3;
-        return pRow === effectiveRow;
-    });
-    const centersInRow = sameRow.filter(p => {
-        const pSide = p.__side || 'Center';
-        return pSide === 'Center';
-    });
-    const idx = centersInRow.findIndex(p => p.id === playerId);
-    const count = Math.max(centersInRow.length, 1);
-    if (count === 1) return { x: 50, y };
-    // 8%〜92% の範囲内で等間隔配置（はみ出し防止）
-    const minX = 10;
-    const maxX = 90;
-    const spacing = Math.min(20, (maxX - minX) / Math.max(count - 1, 1));
-    const totalWidth = spacing * (count - 1);
-    const startX = 50 - totalWidth / 2;
-    return { x: startX + idx * spacing, y };
-}
+// ── Component ──
 
 export function MatchDetailClient({
     match,
@@ -108,75 +52,56 @@ export function MatchDetailClient({
     ratings: initialRatings,
     isUsingMockData,
     events,
-    lineups
+    lineups,
+    nearbyMatches,
 }: MatchDetailClientProps) {
-    // DB側に同名の別UUIDレコードが存在するケースを考慮し、nameで重複を完全排除
+    // Dedup players
     const players = Array.from(new Map(initialPlayers.map(p => [p.name || p.id, p])).values());
-    // リアルタイム採点更新
+
+    // Realtime ratings
     const { ratings, comments, isConnected, optimisticSubmit, getUserRatings } = useRealtimeRatings({
         matchId: match.id,
-        initialRatings
+        initialRatings,
     });
+
     const [userRatings, setUserRatings] = useState<Record<string, { score: number; comment: string }>>({});
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
     const [showShareCard, setShowShareCard] = useState(false);
-    const [ratingViewMode, setRatingViewMode] = useState<'all' | 'mine'>('all');
+    const [ratingViewMode, setRatingViewMode] = useState<'mine' | 'all'>('mine');
 
-    // チーム情報
     const { team: teamConfig } = useTeam();
 
-    // ホーム/アウェーに応じたキットカラー
-    const kitColors = useMemo(() => {
-        return match.is_home
-            ? { primary: teamConfig.kit.home.primary, secondary: teamConfig.kit.home.secondary }
-            : { primary: teamConfig.kit.away.primary, secondary: teamConfig.kit.away.secondary };
-    }, [match.is_home, teamConfig]);
-
-    // Get current user and their existing ratings
+    // Auth + existing ratings
     useEffect(() => {
         const supabase = createClient();
-
         supabase.auth.getUser().then(({ data: { user } }) => {
             setUser(user);
             setLoading(false);
-
-            // If logged in, fetch their existing ratings for this match
             if (user) {
-                supabase
-                    .from('ratings')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .eq('match_id', match.id)
+                supabase.from('ratings').select('*')
+                    .eq('user_id', user.id).eq('match_id', match.id)
                     .then(({ data }) => {
                         if (data) {
-                            const existingRatings: Record<string, { score: number; comment: string }> = {};
+                            const existing: Record<string, { score: number; comment: string }> = {};
                             data.forEach((r: any) => {
-                                existingRatings[r.player_id] = {
-                                    score: r.score,
-                                    comment: r.comment || ''
-                                };
+                                existing[r.player_id] = { score: r.score, comment: r.comment || '' };
                             });
-                            setUserRatings(existingRatings);
+                            setUserRatings(existing);
                         }
                     });
             }
         });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
-                setUser(session?.user ?? null);
-            }
-        );
-
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user ?? null);
+        });
         return () => subscription.unsubscribe();
     }, [match.id]);
 
-    // Separate starters and substitutes
+    // Separate starters / substitutes
     const { starters, substitutes } = useMemo(() => {
-        // player.id ベースで重複排除
         const seen = new Set<string>();
         const starterList: typeof players = [];
         const subList: typeof players = [];
@@ -189,751 +114,378 @@ export function MatchDetailClient({
         return { starters: starterList, substitutes: subList };
     }, [players]);
 
-    // Group players by position for starters only
-    const playersByPosition = useMemo(() => {
-        const groups: Record<string, typeof players> = {
-            GK: [],
-            DF: [],
-            MF: [],
-            FW: [],
-        };
+    // Build PitchPlayer array from lineups
+    const pitchPlayers: PitchPlayer[] = useMemo(() => {
+        const lineupStarters = lineups.filter(l => l.is_starter);
+        const seenIds = new Set<string>();
 
-        starters.forEach(player => {
-            const pos = player.position || 'MF';
-            if (groups[pos]) {
-                groups[pos].push(player);
-            }
+        if (lineupStarters.length > 0) {
+            return lineupStarters.filter(lu => {
+                if (!lu.player_id || seenIds.has(lu.player_id)) return false;
+                seenIds.add(lu.player_id);
+                return true;
+            }).map(lu => {
+                const p = players.find(pl => pl.id === lu.player_id);
+                return {
+                    id: lu.player_id || '',
+                    name: lu.player_name || p?.name || '',
+                    number: lu.jersey_number || p?.number || 0,
+                    pixel_config: p?.pixel_config,
+                    role: lu.role || lu.position_role || p?.position || 'MF',
+                    side: lu.position_side || 'Center',
+                    positionRow: lu.position_row || undefined,
+                    positionCol: lu.position_col || undefined,
+                };
+            });
+        }
+
+        return starters.map(player => ({
+            id: player.id,
+            name: player.name,
+            number: player.number,
+            pixel_config: player.pixel_config,
+            role: player.position || 'MF',
+            side: 'Center',
+        }));
+    }, [lineups, players, starters]);
+
+    // All players list for sequential nav (starters + subs)
+    const allPlayersForNav = useMemo(() => {
+        const starterPlayers = pitchPlayers.map(pp => {
+            const p = players.find(pl => pl.id === pp.id);
+            return {
+                id: pp.id,
+                name: pp.name,
+                number: pp.number,
+                position: p?.position || 'MF',
+                pixel_config: pp.pixel_config,
+            };
         });
+        const subPlayers = substitutes.map(p => ({
+            id: p.id,
+            name: p.name,
+            number: p.number,
+            position: p.position || 'MF',
+            pixel_config: p.pixel_config,
+        }));
+        return [...starterPlayers, ...subPlayers];
+    }, [pitchPlayers, substitutes, players]);
 
-        return groups;
-    }, [starters]);
+    // MVP
+    const mvpPlayerId = useMemo(() => {
+        const myRatings = user ? getUserRatings(user.id) : {};
+        const entries = pitchPlayers.map(p => {
+            const score = ratingViewMode === 'all'
+                ? (ratings[p.id]?.average ?? null)
+                : (myRatings[p.id] ?? null);
+            return { id: p.id, score };
+        }).filter(r => r.score !== null);
+        if (entries.length === 0) return null;
+        return entries.reduce((best, cur) => (cur.score! > best.score! ? cur : best)).id;
+    }, [pitchPlayers, ratings, ratingViewMode, user, getUserRatings]);
 
+    // User scores flat map
+    const userScoresMap = useMemo(() => {
+        if (!user) return {};
+        return getUserRatings(user.id);
+    }, [user, getUserRatings]);
+
+    // Match average
+    const matchAverageRating = useMemo(() => {
+        const vals = Object.values(ratings);
+        if (vals.length === 0) return null;
+        return vals.reduce((acc, r) => acc + r.average, 0) / vals.length;
+    }, [ratings]);
+
+    // Submit handler
     const handleSubmitRating = async (playerId: string, score: number, comment: string) => {
         if (!user) {
             setIsLoginModalOpen(true);
             return;
         }
-
-        // 楽観的更新: UIを即時反映
         const tempId = crypto.randomUUID();
         const userName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'ファン';
         optimisticSubmit(tempId, playerId, score, comment, userName, user.id);
 
         const supabase = createClient();
-
-        const { error } = await supabase
-            .from('ratings')
-            .upsert({
-                user_id: user.id,
-                match_id: match.id,
-                player_id: playerId,
-                score,
-                comment: comment || null,
-                user_name: userName,
-            } as Record<string, unknown>, {
-                onConflict: 'user_id,match_id,player_id'
-            });
+        const { error } = await supabase.from('ratings').upsert({
+            user_id: user.id,
+            match_id: match.id,
+            player_id: playerId,
+            score,
+            comment: comment || null,
+            user_name: userName,
+        } as Record<string, unknown>, { onConflict: 'user_id,match_id,player_id' });
 
         if (error) {
             console.error('Error submitting rating:', error);
             alert('採点の保存に失敗しました');
             return;
         }
-
-        setUserRatings(prev => ({
-            ...prev,
-            [playerId]: { score, comment }
-        }));
+        setUserRatings(prev => ({ ...prev, [playerId]: { score, comment } }));
     };
 
-    const handleSignIn = async () => {
-        setIsLoginModalOpen(true);
-    };
+    // Nearby matches — prioritize unrated finished matches
+    const sortedNearbyMatches = useMemo(() => {
+        const finished = nearbyMatches.filter(m => m.status === 'finished');
+        const upcoming = nearbyMatches.filter(m => m.status !== 'finished');
+        // Simple sort: finished first (most recent), then upcoming
+        return [...finished.slice(0, 4), ...upcoming.slice(0, 2)];
+    }, [nearbyMatches]);
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('ja-JP', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
-    const getResultBadge = () => {
-        if (match.status !== 'finished' || match.home_score === null || match.away_score === null) {
-            return null;
-        }
-
-        const isWin = match.home_score > match.away_score;
-        const isDraw = match.home_score === match.away_score;
-
-        if (isWin) {
-            return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-bold">勝利</span>;
-        }
-        if (isDraw) {
-            return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-bold">引き分け</span>;
-        }
-        return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-bold">敗北</span>;
-    };
-
-    // Calculate average of all ratings
-    const matchAverageRating = useMemo(() => {
-        const ratingValues = Object.values(ratings);
-        if (ratingValues.length === 0) return null;
-        const sum = ratingValues.reduce((acc, r) => acc + r.average, 0);
-        return sum / ratingValues.length;
-    }, [ratings]);
+    // Selected player info for sheet
+    const selectedPlayer = selectedPlayerId
+        ? allPlayersForNav.find(p => p.id === selectedPlayerId) || null
+        : null;
 
     return (
         <div className="-mt-8 -mx-4">
             <PixelToastContainer />
-            <LoginModal
-                isOpen={isLoginModalOpen}
-                onClose={() => setIsLoginModalOpen(false)}
+            <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+
+            {/* Player Rating Sheet — bottom sheet / side panel */}
+            <PlayerRatingSheet
+                isOpen={!!selectedPlayerId && match.status === 'finished'}
+                onClose={() => setSelectedPlayerId(null)}
+                player={selectedPlayer}
+                matchId={match.id}
+                allPlayers={allPlayersForNav}
+                user={user}
+                onAuthAction={() => setIsLoginModalOpen(true)}
+                onSubmitRating={handleSubmitRating}
+                existingRating={selectedPlayerId ? userRatings[selectedPlayerId] : null}
+                averageRating={selectedPlayerId ? (ratings[selectedPlayerId]?.average ?? null) : null}
+                totalRatings={selectedPlayerId ? (ratings[selectedPlayerId]?.count ?? 0) : 0}
+                onNavigate={(id) => setSelectedPlayerId(id)}
             />
-            {/* Player Comment Modal */}
-            {selectedPlayerId && (() => {
-                const player = players.find(p => p.id === selectedPlayerId);
-                if (!player) return null;
-                const playerRating = ratings[selectedPlayerId];
-                return (
-                    <PlayerCommentModal
-                        isOpen={true}
-                        onClose={() => setSelectedPlayerId(null)}
-                        playerId={selectedPlayerId}
-                        matchId={match.id}
-                        playerName={player.name}
-                        playerNumber={player.number}
-                        playerPosition={player.position || 'MF'}
-                        pixelConfig={player.pixel_config}
-                        averageRating={playerRating?.average || null}
-                        totalRatings={playerRating?.count || 0}
-                        user={user}
-                        onAuthAction={handleSignIn}
-                        filterUserId={ratingViewMode === 'mine' ? user?.id : null}
-                    />
-                );
-            })()}
-            {/* Custom Header for this page */}
+
+            {/* Header */}
             <BackHeader
                 title={`${teamConfig.name} vs ${match.opponent_name}`}
                 subtitle={match.competition || undefined}
             />
 
-            <div className="container mx-auto px-4 py-8 space-y-8">
-                {/* Realtime Connection Indicator */}
+            <div className="container mx-auto px-4 py-6 space-y-10 md:space-y-12">
+                {/* Realtime indicator */}
                 {match.status === 'finished' && !isUsingMockData && (
-                    <div className={`flex items-center gap-2 text-xs ${isConnected ? 'text-green-600' : 'text-muted-foreground'}`}>
-                        {isConnected ? (
-                            <>
-                                <Wifi className="w-4 h-4" />
-                                <span>リアルタイム更新中</span>
-                            </>
-                        ) : (
-                            <>
-                                <WifiOff className="w-4 h-4" />
-                                <span>接続中...</span>
-                            </>
-                        )}
+                    <div className={`flex items-center gap-2 text-xs ${isConnected ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                        {isConnected
+                            ? <><Wifi className="w-3.5 h-3.5" /><span>リアルタイム更新中</span></>
+                            : <><WifiOff className="w-3.5 h-3.5" /><span>接続中...</span></>
+                        }
                     </div>
                 )}
 
-                {/* Debug Banner */}
+                {/* Mock data banner */}
                 {isUsingMockData && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
-                        <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                    <div className="bg-amber-50 border border-amber-200/50 rounded-[14px] p-4 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                         <div>
-                            <p className="text-sm text-yellow-800 font-medium">
-                                モックデータを使用中
-                            </p>
-                            <p className="text-xs text-yellow-600">
-                                Supabaseに接続できません。データベーステーブルを作成してください。
-                            </p>
+                            <p className="text-sm text-amber-800 font-medium">モックデータを使用中</p>
+                            <p className="text-xs text-amber-600">Supabaseに接続できません。</p>
                         </div>
                     </div>
                 )}
 
-                {/* MVP Banner - show only for finished matches with ratings */}
-                {match.status === 'finished' && Object.keys(ratings).length > 0 && (
-                    <TopRatedBanner players={players} ratings={ratings} />
-                )}
+                {/* ── 1. Match Hero ── */}
+                <MatchHero
+                    match={match}
+                    events={events}
+                    matchAverageRating={matchAverageRating}
+                    userRatingsCount={Object.keys(userRatings).length}
+                    onShareCard={() => setShowShareCard(true)}
+                />
 
-                {/* Match Summary Card - Home team always on left, Away on right */}
-                <div className="bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6 md:p-8 text-white">
-                    {/* Competition and Date Header */}
-                    <div className="text-center mb-4">
-                        <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
-                            <Trophy className="w-4 h-4" />
-                            <span>{match.competition}</span>
-                        </div>
-                        <div className="text-sm text-slate-400 mt-1">
-                            {formatDate(match.match_date)}
-                        </div>
-                    </div>
-
-                    {/* Teams and Score */}
-                    <div className="flex items-center justify-center gap-4 md:gap-8">
-                        {/* Home Team (Left Side) */}
-                        <div className="flex-1 flex flex-col items-center text-center">
-                            {match.is_home ? (
-                                <>
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full shadow-lg mb-2 overflow-hidden flex">
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: teamConfig.colors.primary }} />
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: teamConfig.colors.secondary }} />
-                                    </div>
-                                    <p className="text-lg md:text-xl font-bold">{teamConfig.name}</p>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden flex shadow-lg mb-2">
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).primary }} />
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).secondary }} />
-                                    </div>
-                                    <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
-                                </>
-                            )}
-                            {/* Home Team Events (Goals & Cards) */}
-                            {match.status === 'finished' && events.length > 0 && (
-                                <div className="mt-2 text-xs text-slate-400 space-y-0.5">
-                                    {events
-                                        .filter(e => ['goal', 'yellow_card', 'red_card'].includes(e.event_type))
-                                        .filter(e => {
-                                            // is_milan defaults to true for admin-created events
-                                            const isMilanEvent = String(e.details?.is_milan) !== 'false';
-                                            // Home side shows: Milan events if is_home, opponent events if !is_home
-                                            return match.is_home ? isMilanEvent : !isMilanEvent;
-                                        })
-                                        .sort((a, b) => a.minute - b.minute)
-                                        .map((e, i) => (
-                                            <div key={i}>
-                                                {e.event_type === 'goal' && '⚽ '}
-                                                {e.event_type === 'yellow_card' && '🟨 '}
-                                                {e.event_type === 'red_card' && '🟥 '}
-                                                {e.player_name.split(' ').pop()} {e.minute}&apos;
-                                                {e.event_type === 'goal' && String(e.details?.penalty) === 'true' && ' (PK)'}
-                                                {e.event_type === 'goal' && e.details?.assisted_by && (
-                                                    <span className="text-slate-500"> (🅰️{String(e.details.assisted_by).split(' ').pop()})</span>
-                                                )}
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Score */}
-                        <div className="flex flex-col items-center">
-                            {match.status === 'finished' ? (
-                                <>
-                                    <div className="flex items-center gap-3 text-4xl md:text-5xl font-bold">
-                                        <span className={
-                                            (match.is_home && match.home_score! > match.away_score!) ||
-                                                (!match.is_home && match.away_score! > match.home_score!)
-                                                ? 'text-red-500' : 'text-white'
-                                        }>
-                                            {match.home_score}
-                                        </span>
-                                        <span className="text-slate-500 text-2xl">-</span>
-                                        <span className={
-                                            (!match.is_home && match.home_score! > match.away_score!) ||
-                                                (match.is_home && match.away_score! > match.home_score!)
-                                                ? 'text-red-500' : 'text-white'
-                                        }>
-                                            {match.away_score}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2">
-                                        {(() => {
-                                            const milanScore = match.is_home ? match.home_score! : match.away_score!;
-                                            const opponentScore = match.is_home ? match.away_score! : match.home_score!;
-                                            if (milanScore > opponentScore) {
-                                                return <span className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">勝利</span>;
-                                            } else if (milanScore === opponentScore) {
-                                                return <span className="bg-yellow-600 text-white px-3 py-1 rounded-full text-xs font-bold">引き分け</span>;
-                                            } else {
-                                                return <span className="bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold">敗北</span>;
-                                            }
-                                        })()}
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-3xl font-bold text-slate-400">VS</div>
-                            )}
-                        </div>
-
-                        {/* Away Team (Right Side) */}
-                        <div className="flex-1 flex flex-col items-center text-center">
-                            {!match.is_home ? (
-                                <>
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full shadow-lg mb-2 overflow-hidden flex">
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: teamConfig.colors.primary }} />
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: teamConfig.colors.secondary }} />
-                                    </div>
-                                    <p className="text-lg md:text-xl font-bold">{teamConfig.name}</p>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden flex shadow-lg mb-2">
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).primary }} />
-                                        <div className="w-1/2 h-full" style={{ backgroundColor: getTeamColors(match.opponent_name).secondary }} />
-                                    </div>
-                                    <p className="text-lg md:text-xl font-bold">{match.opponent_name}</p>
-                                </>
-                            )}
-                            {/* Away Team Events (Goals & Cards) */}
-                            {match.status === 'finished' && events.length > 0 && (
-                                <div className="mt-2 text-xs text-slate-400 space-y-0.5">
-                                    {events
-                                        .filter(e => ['goal', 'yellow_card', 'red_card'].includes(e.event_type))
-                                        .filter(e => {
-                                            const isMilanEvent = String(e.details?.is_milan) !== 'false';
-                                            // Away side shows: Milan events if !is_home, opponent events if is_home
-                                            return match.is_home ? !isMilanEvent : isMilanEvent;
-                                        })
-                                        .sort((a, b) => a.minute - b.minute)
-                                        .map((e, i) => (
-                                            <div key={i}>
-                                                {e.event_type === 'goal' && '⚽ '}
-                                                {e.event_type === 'yellow_card' && '🟨 '}
-                                                {e.event_type === 'red_card' && '🟥 '}
-                                                {e.player_name.split(' ').pop()} {e.minute}&apos;
-                                                {e.event_type === 'goal' && String(e.details?.penalty) === 'true' && ' (PK)'}
-                                                {e.event_type === 'goal' && e.details?.assisted_by && (
-                                                    <span className="text-slate-500"> (🅰️{String(e.details.assisted_by).split(' ').pop()})</span>
-                                                )}
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Team Average Rating */}
-                    {matchAverageRating && (
-                        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-700 text-sm">
-                            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                            <span className="text-slate-400">チーム平均:</span>
-                            <strong className="text-yellow-500">{matchAverageRating.toFixed(1)}</strong>
-                        </div>
-                    )}
-
-                    {/* Share Button in Scoreboard */}
-                    {match.status === 'finished' && Object.keys(userRatings).length > 0 && (
-                        <button
-                            onClick={() => setShowShareCard(true)}
-                            className="mt-3 w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-lg border border-white/20 text-xs transition-all"
-                            style={{ fontFamily: 'monospace' }}
-                        >
-                            <Download className="w-3.5 h-3.5" />
-                            📸 採点カードを保存
-                        </button>
-                    )}
-                </div>
-
-                {/* Player Ratings Section */}
+                {/* ── 2. Rating section (only for finished matches) ── */}
                 {match.status === 'finished' ? (
-                    <div className="space-y-8">
-                        <div className="flex items-center gap-2">
-                            <Users className="w-5 h-5 text-primary" />
-                            <h2 className="text-2xl font-bold">選手採点</h2>
-                            <span className="text-sm text-muted-foreground ml-2">
-                                スライダーで1.0〜10.0の間で評価してください
-                            </span>
-                        </div>
-
-                        {/* Skeleton while loading */}
-                        {loading && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                {Array.from({ length: 4 }).map((_, i) => (
-                                    <PixelSkeletonCard key={i} />
-                                ))}
-                            </div>
+                    <div className="space-y-10 md:space-y-12">
+                        {/* Login prompt */}
+                        {!loading && !user && (
+                            <button
+                                onClick={() => setIsLoginModalOpen(true)}
+                                className="w-full flex items-center justify-between bg-white border border-black/[0.06] rounded-[14px] p-4 hover:bg-black/[0.01] transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <LogIn className="w-5 h-5 text-muted-foreground" />
+                                    <div className="text-left">
+                                        <p className="text-sm font-medium">ログインして採点に参加</p>
+                                        <p className="text-xs text-muted-foreground">Googleアカウントで簡単ログイン</p>
+                                    </div>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                            </button>
                         )}
 
-                        {/* Login Prompt for non-authenticated users */}
-                        {!loading && !user && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <LogIn className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                                    <div>
-                                        <p className="text-sm text-blue-800 font-medium">
-                                            ログインして採点に参加しよう
-                                        </p>
-                                        <p className="text-xs text-blue-600">
-                                            Googleアカウントで簡単にログインできます
-                                        </p>
-                                    </div>
-                                </div>
+                        {/* View mode toggle */}
+                        <div className="flex items-center justify-between">
+                            <SectionHeader
+                                icon={Users}
+                                title="選手採点"
+                                accentColor={teamConfig.colors.accent}
+                            />
+                            <div className="flex bg-black/[0.03] rounded-[10px] p-0.5 text-xs">
                                 <button
-                                    onClick={handleSignIn}
-                                    className="flex items-center gap-2 text-sm font-medium bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+                                    onClick={() => setRatingViewMode('mine')}
+                                    className={`px-3 py-1.5 rounded-[8px] font-medium transition-all ${
+                                        ratingViewMode === 'mine'
+                                            ? 'bg-white shadow-sm text-foreground'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
                                 >
-                                    <LogIn className="w-4 h-4" />
-                                    ログイン
+                                    あなたの評価
+                                </button>
+                                <button
+                                    onClick={() => setRatingViewMode('all')}
+                                    className={`px-3 py-1.5 rounded-[8px] font-medium transition-all ${
+                                        ratingViewMode === 'all'
+                                            ? 'bg-white shadow-sm text-foreground'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                >
+                                    みんなの評価
                                 </button>
                             </div>
-                        )}
-
-
-                        {/* MVP Banner */}
-                        {Object.keys(ratings).length > 0 && (
-                            <div className="mb-6">
-                                <TopRatedBanner
-                                    players={players}
-                                    ratings={ratings}
-                                    topComment={(() => {
-                                        // MVP選手を特定
-                                        let bestPlayer: Player | null = null;
-                                        let bestRating = -1;
-
-                                        players.forEach(p => {
-                                            const r = ratings[p.id];
-                                            if (r && r.average > bestRating) {
-                                                bestRating = r.average;
-                                                bestPlayer = p;
-                                            }
-                                        });
-
-                                        if (!bestPlayer) return null;
-
-                                        // MVPのコメントを取得
-                                        // useRealtimeRatingsで取得したcommentsデータを使用
-                                        const bp = bestPlayer as Player;
-                                        const playerComments = comments[bp.id] || [];
-                                        if (playerComments.length === 0) return null;
-
-                                        // いいね順 -> 新着順でソート
-                                        // 現在はlikesCountが未実装(0)なので実質新着順になるが、ロジックとしては正しい
-                                        const sorted = [...playerComments].sort((a, b) => {
-                                            if (b.likesCount !== a.likesCount) return b.likesCount - a.likesCount;
-                                            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                                        });
-
-                                        const top = sorted[0];
-                                        return {
-                                            userName: top.userName, // 匿名/ミラニスタ
-                                            comment: top.comment,
-                                            score: top.score
-                                        };
-                                    })()}
-                                    onShowComments={() => {
-                                        // MVP選手のPlayerCommentModalを開く
-                                        let bestPlayerId = '';
-                                        let bestRating = -1;
-                                        players.forEach(p => {
-                                            const r = ratings[p.id];
-                                            if (r && r.average > bestRating) {
-                                                bestRating = r.average;
-                                                bestPlayerId = p.id;
-                                            }
-                                        });
-                                        if (bestPlayerId) setSelectedPlayerId(bestPlayerId);
-                                    }}
-                                    totalComments={(() => {
-                                        let bestPlayerId = '';
-                                        let bestRating = -1;
-                                        players.forEach(p => {
-                                            const r = ratings[p.id];
-                                            if (r && r.average > bestRating) {
-                                                bestRating = r.average;
-                                                bestPlayerId = p.id;
-                                            }
-                                        });
-                                        return bestPlayerId ? (comments[bestPlayerId]?.length || 0) : 0;
-                                    })()}
-                                />
-                            </div>
-                        )}
-
-                        {/* ======= フォーメーション図＋交代選手一覧（表示のみ） ======= */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            {/* LEFT: Formation Pitch */}
-                            <div className="lg:col-span-2 space-y-2">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                                        ⚽ フォーメーション{match.formation ? ` (${match.formation})` : ''}
-                                    </h3>
-                                    {/* みんな / 自分の評価タブ */}
-                                    <div className="flex bg-muted rounded-lg p-0.5 text-xs">
-                                        <button
-                                            onClick={() => setRatingViewMode('all')}
-                                            className={`px-3 py-1.5 rounded-md font-medium transition-all ${
-                                                ratingViewMode === 'all'
-                                                    ? 'bg-white shadow-sm text-foreground'
-                                                    : 'text-muted-foreground hover:text-foreground'
-                                            }`}
-                                        >
-                                            👥 みんなの評価
-                                        </button>
-                                        <button
-                                            onClick={() => setRatingViewMode('mine')}
-                                            className={`px-3 py-1.5 rounded-md font-medium transition-all ${
-                                                ratingViewMode === 'mine'
-                                                    ? 'bg-white shadow-sm text-foreground'
-                                                    : 'text-muted-foreground hover:text-foreground'
-                                            }`}
-                                        >
-                                            🙋 自分の評価
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="relative w-full aspect-[2/3] sm:aspect-[3/2] bg-gradient-to-b from-green-600 to-green-700 rounded-xl overflow-hidden border-2 border-black"
-                                    style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)', minHeight: '320px' }}>
-                                    {/* Pitch Lines */}
-                                    <div className="absolute inset-0">
-                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-white/30 rounded-full" />
-                                        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/30" />
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-12 border-2 border-t-0 border-white/30" />
-                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-12 border-2 border-b-0 border-white/30" />
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-20 border-2 border-t-0 border-white/30" />
-                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 h-20 border-2 border-b-0 border-white/30" />
-                                    </div>
-
-                                    {/* Players on Pitch */}
-                                    {(() => {
-                                        const lineupStarters = lineups.filter(l => l.is_starter);
-                                        // player_id での重複排除
-                                        const seenIds = new Set<string>();
-                                        const pitchPlayers = lineupStarters.length > 0
-                                            ? lineupStarters.filter(lu => {
-                                                if (!lu.player_id || seenIds.has(lu.player_id)) return false;
-                                                seenIds.add(lu.player_id);
-                                                return true;
-                                            }).map(lu => {
-                                                const p = players.find((pl: any) => pl.id === lu.player_id);
-                                                return {
-                                                    id: lu.player_id || '',
-                                                    name: lu.player_name || p?.name || '',
-                                                    number: lu.jersey_number || p?.number || 0,
-                                                    pixel_config: p?.pixel_config,
-                                                    __role: lu.role || lu.position_role || p?.position || 'MF',
-                                                    __side: lu.position_side || 'Center',
-                                                    __positionRow: lu.position_row || undefined,
-                                                    __positionCol: lu.position_col || undefined,
-                                                };
-                                            })
-                                            : starters.map(player => ({
-                                                ...player,
-                                                __role: player.position || 'MF',
-                                                __side: 'Center' as string,
-                                                __positionRow: undefined as number | undefined,
-                                                __positionCol: undefined as number | undefined,
-                                            }));
-
-                                        // Ensure unique players for display on pitch
-                                        const uniquePitchPlayers = pitchPlayers.filter((p, i, self) =>
-                                            self.findIndex(sp => sp.id === p.id) === i
-                                        );
-
-                                        // 最高評価選手を特定
-                                        const allRatingsForMvp = uniquePitchPlayers.map(p => {
-                                            const myR = user ? getUserRatings(user.id) : {};
-                                            const pr = ratingViewMode === 'all'
-                                                ? (ratings[p.id] ? ratings[p.id].average : null)
-                                                : (myR[p.id] ?? null);
-                                            return { id: p.id, score: pr };
-                                        }).filter(r => r.score !== null);
-                                        const mvpId = allRatingsForMvp.length > 0
-                                            ? allRatingsForMvp.reduce((best, cur) => (cur.score! > best.score! ? cur : best)).id
-                                            : null;
-
-                                        return uniquePitchPlayers.map(player => {
-                                            const pos = getFormationPosition(player.__role, player.__side, match.formation || '4-3-3', pitchPlayers, player.id, player.__positionRow, player.__positionCol);
-                                            // ratingViewMode に応じてスコアを切り替え
-                                            const myRatings = user ? getUserRatings(user.id) : {};
-                                            const playerRating = ratingViewMode === 'all'
-                                                ? (ratings[player.id] ? { average: ratings[player.id].average, count: ratings[player.id].count } : null)
-                                                : (myRatings[player.id] ? { average: myRatings[player.id], count: 1 } : null);
-                                            const isMvp = player.id === mvpId;
-                                            // ★ 根本修正: z-indexをY座標の逆数に設定
-                                            const dynamicZ = Math.round(100 - pos.y) + (isMvp ? 50 : 0);
-                                            return (
-                                                <div
-                                                    key={player.id}
-                                                    className="absolute group cursor-pointer transition-transform hover:scale-110 active:scale-95"
-                                                    style={{
-                                                        left: `${pos.x}%`,
-                                                        top: `${pos.y}%`,
-                                                        transform: 'translate(-50%, -50%)',
-                                                        zIndex: dynamicZ,
-                                                    }}
-                                                    onClick={() => setSelectedPlayerId(player.id)}
-                                                >
-                                                    {/* アイコンコンテナ — サイズ固定でtranslateの基準に */}
-                                                    <div className="relative">
-                                                        {/* MVP 王冠 — アイコンの上 */}
-                                                        {isMvp && (
-                                                            <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] sm:text-xs leading-none">⭐</span>
-                                                        )}
-                                                        {/* アイコン — モバイル28px / デスクトップ48px */}
-                                                        <div className={`w-7 h-7 sm:w-12 sm:h-12 ${isMvp ? 'ring-2 ring-yellow-400 rounded-full shadow-[0_0_8px_rgba(250,204,21,0.5)]' : ''}`}>
-                                                            {player.pixel_config && (
-                                                                <div className="w-7 h-7 sm:w-12 sm:h-12" style={{ imageRendering: 'pixelated' as any }}>
-                                                                    <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        {/* 名前ラベル — アイコンの完全下に absolute 配置 */}
-                                                        <span className={`absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] sm:text-[11px] font-bold px-1 py-px rounded text-center leading-none ${isMvp ? 'bg-yellow-400 text-black' : 'bg-black/90 text-white'}`}
-                                                            style={{ top: '100%', marginTop: '1px' }}>
-                                                            {player.name.split(' ').pop()?.slice(0, 6) || ''}
-                                                        </span>
-                                                        {/* スコアバッジ — 名前のさらに下 */}
-                                                        {playerRating && (
-                                                            <span className={`absolute left-1/2 -translate-x-1/2 text-[8px] sm:text-[11px] font-bold px-1 py-px rounded leading-none ${
-                                                                isMvp
-                                                                    ? 'bg-yellow-400 text-black border border-yellow-500'
-                                                                    : playerRating.average >= 7 ? 'bg-green-500 text-white' : playerRating.average >= 5 ? 'bg-white text-black border border-gray-300' : 'bg-red-500 text-white'
-                                                            }`}
-                                                                style={{ top: '100%', marginTop: '14px' }}>
-                                                                {playerRating.average.toFixed(1)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-                                </div>
-                            </div>
-
-                            {/* RIGHT: Substitutes (read-only) */}
-                            <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
-                                    🔄 交代出場 ({substitutes.length}人)
-                                </h3>
-                                <div className="bg-gradient-to-b from-blue-900/10 to-blue-800/5 rounded-xl p-4 border border-blue-800/20 space-y-2">
-                                    {substitutes.map(player => {
-                                        const playerRating = ratings[player.id];
-                                        return (
-                                            <div key={player.id} className="flex items-center gap-3 py-1">
-                                                {player.pixel_config && (
-                                                    <div style={{ imageRendering: 'pixelated' as any, width: 48, height: 48 }}>
-                                                        <PixelPlayer config={player.pixel_config} number={player.number} size={48} />
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate">{player.name}</p>
-                                                    <p className="text-xs text-gray-400">#{player.number} {player.position}</p>
-                                                </div>
-                                                {playerRating && (
-                                                    <span className="text-sm font-bold font-mono text-primary">
-                                                        {playerRating.average.toFixed(1)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    {substitutes.length === 0 && (
-                                        <p className="text-sm text-muted-foreground text-center py-4">交代出場なし</p>
-                                    )}
-                                </div>
-                            </div>
                         </div>
 
-                        {/* ======= 選手採点カード（スターター・ポジション別） ======= */}
-                        {Object.entries(playersByPosition).map(([position, posPlayers]) => {
-                            if (posPlayers.length === 0) return null;
-                            const positionLabels: Record<string, string> = {
-                                GK: 'ゴールキーパー', DF: 'ディフェンダー', MF: 'ミッドフィールダー', FW: 'フォワード',
-                            };
-                            return (
-                                <div key={position} className="space-y-3">
-                                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-primary" />
-                                        {positionLabels[position]}
-                                    </h3>
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        {posPlayers.map(player => {
-                                            const playerRating = ratings[player.id];
-                                            const userRating = userRatings[player.id];
-                                            return (
-                                                <MatchRatingCard
-                                                    key={player.id}
-                                                    name={player.name}
-                                                    number={player.number}
-                                                    position={player.position || 'MF'}
-                                                    pixelConfig={player.pixel_config}
-                                                    averageRating={playerRating?.average || null}
-                                                    totalRatings={playerRating?.count || 0}
-                                                    initialRating={userRating?.score ?? 6.0}
-                                                    initialComment={userRating?.comment}
-                                                    isInteractive={true}
-                                                    isLoading={loading}
-                                                    isGuest={!user}
-                                                    onAuthAction={handleSignIn}
-                                                    onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
-                                                    className="w-full"
-                                                    comments={comments[player.id] || []}
-                                                />
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {/* ── 3. Formation Pitch (main) ── */}
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-2 text-center">
+                                {match.formation ? `フォーメーション ${match.formation}` : 'フォーメーション'}
+                            </p>
+                            <FormationPitch
+                                players={pitchPlayers}
+                                formation={match.formation || '4-3-3'}
+                                ratings={ratings}
+                                userRatings={userScoresMap}
+                                viewMode={ratingViewMode}
+                                mvpPlayerId={mvpPlayerId}
+                                selectedPlayerId={selectedPlayerId}
+                                isHome={match.is_home}
+                                onPlayerSelect={(id) => setSelectedPlayerId(id)}
+                            />
+                        </div>
 
-                        {/* 交代出場選手の採点カード */}
+                        {/* ── 4. Substitute Chips ── */}
                         {substitutes.length > 0 && (
-                            <div className="space-y-3">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                    🔄 交代出場の採点
-                                </h3>
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    {(() => {
-                                        const uniqueSubstitutes = substitutes.filter((p, i, self) =>
-                                            self.findIndex(sp => sp.id === p.id) === i
-                                        );
-                                        return uniqueSubstitutes.map(player => {
-                                            const playerRating = ratings[player.id];
-                                            const userRating = userRatings[player.id];
-                                            return (
-                                                <MatchRatingCard
-                                                    key={player.id}
-                                                    name={player.name}
-                                                    number={player.number}
-                                                    position={player.position || 'MF'}
-                                                    pixelConfig={player.pixel_config}
-                                                    averageRating={playerRating?.average || null}
-                                                    totalRatings={playerRating?.count || 0}
-                                                    initialRating={userRating?.score ?? 6.0}
-                                                    initialComment={userRating?.comment}
-                                                    isInteractive={true}
-                                                    isLoading={loading}
-                                                    isGuest={!user}
-                                                    onAuthAction={handleSignIn}
-                                                    onSubmit={(score: number, comment: string) => handleSubmitRating(player.id, score, comment)}
-                                                    className="w-full"
-                                                    comments={comments[player.id] || []}
-                                                />
-                                            );
-                                        });
-                                    })()}
+                            <div>
+                                <SectionHeader
+                                    icon={Users}
+                                    title="途中交代"
+                                    badge={`${substitutes.length}人`}
+                                    accentColor={teamConfig.colors.accent}
+                                />
+                                <div className="mt-3">
+                                    <SubstituteChips
+                                        players={substitutes.map(p => ({
+                                            id: p.id,
+                                            name: p.name,
+                                            number: p.number,
+                                            position: p.position || 'MF',
+                                            pixel_config: p.pixel_config,
+                                        }))}
+                                        ratings={ratings}
+                                        userRatings={userScoresMap}
+                                        viewMode={ratingViewMode}
+                                        onPlayerSelect={(id) => setSelectedPlayerId(id)}
+                                    />
                                 </div>
                             </div>
                         )}
 
-                        {/* Share & Ranking */}
+                        {/* ── 5. MVP Banner ── */}
                         {Object.keys(ratings).length > 0 && (
-                            <RankingCard
-                                title="今試合の評価ランキング"
+                            <TopRatedBanner
                                 players={players}
                                 ratings={ratings}
-                                limit={5}
+                                topComment={(() => {
+                                    let bestPlayer: Player | null = null;
+                                    let bestRating = -1;
+                                    players.forEach(p => {
+                                        const r = ratings[p.id];
+                                        if (r && r.average > bestRating) { bestRating = r.average; bestPlayer = p; }
+                                    });
+                                    if (!bestPlayer) return null;
+                                    const bp = bestPlayer as Player;
+                                    const playerComments = comments[bp.id] || [];
+                                    if (playerComments.length === 0) return null;
+                                    const sorted = [...playerComments].sort((a, b) => b.likesCount - a.likesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                                    const top = sorted[0];
+                                    return { userName: top.userName, comment: top.comment, score: top.score };
+                                })()}
+                                onShowComments={() => {
+                                    let bestPlayerId = '';
+                                    let bestRating = -1;
+                                    players.forEach(p => {
+                                        const r = ratings[p.id];
+                                        if (r && r.average > bestRating) { bestRating = r.average; bestPlayerId = p.id; }
+                                    });
+                                    if (bestPlayerId) setSelectedPlayerId(bestPlayerId);
+                                }}
+                                totalComments={(() => {
+                                    let bestPlayerId = '';
+                                    let bestRating = -1;
+                                    players.forEach(p => {
+                                        const r = ratings[p.id];
+                                        if (r && r.average > bestRating) { bestRating = r.average; bestPlayerId = p.id; }
+                                    });
+                                    return bestPlayerId ? (comments[bestPlayerId]?.length || 0) : 0;
+                                })()}
                             />
+                        )}
+
+                        {/* ── 6. Ranking ── */}
+                        {Object.keys(ratings).length > 0 && (
+                            <RankingCard title="今試合の評価ランキング" players={players} ratings={ratings} limit={5} />
                         )}
                     </div>
                 ) : (
-                    <div className="bg-muted/50 rounded-xl p-8 text-center">
+                    <div className="bg-black/[0.02] rounded-[16px] p-8 text-center">
                         <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="text-xl font-bold mb-2">試合終了後に採点できます</h3>
-                        <p className="text-muted-foreground">
+                        <h3 className="text-lg font-bold mb-2">試合終了後に採点できます</h3>
+                        <p className="text-sm text-muted-foreground">
                             この試合はまだ行われていません。試合終了後に選手の採点が可能になります。
                         </p>
+                    </div>
+                )}
+
+                {/* ── 7. Recirculation — nearby matches ── */}
+                {sortedNearbyMatches.length > 0 && (
+                    <div>
+                        <SectionHeader
+                            icon={Star}
+                            title="他の試合も採点する"
+                            accentColor={teamConfig.colors.accent}
+                        />
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {sortedNearbyMatches.slice(0, 4).map(m => {
+                                const isFinished = m.status === 'finished';
+                                const dateStr = new Date(m.match_date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+                                return (
+                                    <Link
+                                        key={m.id}
+                                        href={`/${teamConfig.id}/matches/${m.id}`}
+                                        className="group flex items-center gap-3 bg-white border border-black/[0.06] rounded-[14px] p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">
+                                                {m.is_home ? teamConfig.name : m.opponent_name} vs {m.is_home ? m.opponent_name : teamConfig.name}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-xs text-muted-foreground">{dateStr}</span>
+                                                {isFinished && m.home_score !== null && (
+                                                    <span className="text-xs font-bold tabular-nums">{m.home_score} - {m.away_score}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className={`text-[11px] font-medium px-2 py-1 rounded-full ${
+                                            isFinished ? 'bg-emerald-500/10 text-emerald-600' : 'bg-black/[0.04] text-muted-foreground'
+                                        }`}>
+                                            {isFinished ? '採点する' : '予定'}
+                                        </span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </div>
@@ -946,16 +498,10 @@ export function MatchDetailClient({
                 matchDate={match.match_date}
                 competition={match.competition || 'Match'}
                 resultText={match.home_score !== null && match.away_score !== null
-                    ? `${match.home_score} - ${match.away_score}`
-                    : 'vs'}
+                    ? `${match.home_score} - ${match.away_score}` : 'vs'}
                 playerRatings={Object.entries(userRatings).map(([pid, r]) => {
                     const p = players.find(pl => pl.id === pid);
-                    return {
-                        name: p?.name || 'Unknown',
-                        number: p?.number || 0,
-                        position: p?.position || 'MF',
-                        score: r.score,
-                    };
+                    return { name: p?.name || 'Unknown', number: p?.number || 0, position: p?.position || 'MF', score: r.score };
                 }).sort((a, b) => b.score - a.score)}
                 formation={match.formation || '4-3-3'}
                 userName={user?.user_metadata?.username || user?.email?.split('@')[0] || 'ミラニスタ'}
@@ -966,19 +512,19 @@ export function MatchDetailClient({
                     const rowYMap: Record<number, number> = { 1: 90, 2: 74, 3: 56, 4: 38, 5: 18 };
                     const colXMap: Record<number, number> = { 1: 12, 2: 30, 3: 50, 4: 70, 5: 88 };
                     const seenIds = new Set<string>();
-                    const starters = lineupStarters.filter(lu => {
+                    const startersFiltered = lineupStarters.filter(lu => {
                         if (!lu.player_id || seenIds.has(lu.player_id)) return false;
                         seenIds.add(lu.player_id);
                         return true;
                     });
-                    const pitchData = starters.map(lu => ({
+                    const pitchData = startersFiltered.map(lu => ({
                         id: lu.player_id || '',
                         __role: lu.role || lu.position_role || 'MF',
                         __side: lu.position_side || 'Center',
                         __positionRow: lu.position_row,
                         __positionCol: lu.position_col,
                     }));
-                    return starters.map(lu => {
+                    return startersFiltered.map(lu => {
                         const p = players.find(pl => pl.id === lu.player_id);
                         const row = lu.position_row || roleToRow[lu.role || lu.position_role || 'MF'] || 3;
                         const y = rowYMap[row] ?? 50;
@@ -986,7 +532,6 @@ export function MatchDetailClient({
                         if (lu.position_col && lu.position_col >= 1 && lu.position_col <= 5) {
                             x = colXMap[lu.position_col];
                         } else {
-                            // 5段階side値に対応
                             const sideXMap: Record<string, number> = { FarLeft: 10, Left: 28, Center: 50, Right: 72, FarRight: 90 };
                             if (lu.position_side && sideXMap[lu.position_side] !== undefined) {
                                 x = sideXMap[lu.position_side];
@@ -1010,8 +555,7 @@ export function MatchDetailClient({
                             name: lu.player_name || p?.name || '',
                             number: lu.jersey_number || p?.number || 0,
                             score: myScore ? myScore.score : null,
-                            x,
-                            y,
+                            x, y,
                             pixel_config: p?.pixel_config || null,
                         };
                     });
