@@ -1,11 +1,15 @@
 import { createClient } from '@/lib/supabase/server';
 import { MatchCard } from '@/components/match-card';
-import { PixelPlayer } from '@/components/pixel-player';
-import { Calendar, Users, Star, TrendingUp, AlertCircle, ChevronRight, Clock, MessageSquare, Trophy, Zap } from 'lucide-react';
+import { Calendar, AlertCircle, Clock, TrendingUp } from 'lucide-react';
 import { MOCK_MATCHES, MOCK_PLAYERS } from '@/lib/mock-data';
-import Link from 'next/link';
 import { getTeamConfig } from '@/lib/team-config';
 import { notFound } from 'next/navigation';
+
+// Home components
+import { HeroSection } from '@/components/home/hero-section';
+import { NextMatchCard } from '@/components/home/next-match-card';
+import { FeatureCards } from '@/components/home/feature-cards';
+import { SectionHeader } from '@/components/home/section-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,13 +90,10 @@ function getDisplayStatus(match: { status: string; match_date: string }): 'finis
     const now = Date.now();
 
     if (match.status === 'finished') {
-        // 異常データ保護: 未来日時の finished は upcoming 扱い
         if (matchTime > now) return 'upcoming';
         return 'finished';
     }
-    // 過去日時の未finished試合は常に「結果待ち」を優先（DB statusがliveでも）
     if (matchTime < now) return 'pending';
-    // 未来日時でDB statusがliveの場合のみLIVE表示
     if (match.status === 'live') return 'live';
     return 'upcoming';
 }
@@ -136,216 +137,72 @@ export default async function TeamHome({ params }: PageProps) {
     const primaryCtaHref = latestFinished
         ? `/${team_id}/matches/${latestFinished.id}`
         : `/${team_id}/matches`;
-    const secondaryCtaHref = `/${team_id}/matches`;
+
+    const accent = teamConfig.colors.accent;
 
     return (
-        <div className="space-y-10">
+        <div className="space-y-12 md:space-y-16">
             {isUsingMockData && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-[12px] p-4 flex items-center gap-3">
                     <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
                     <div>
                         <p className="text-sm text-yellow-800 font-medium">モックデータを使用中</p>
-                        <p className="text-xs text-yellow-600">Supabaseに接続できません。データベーステーブルを作成してください。</p>
+                        <p className="text-xs text-yellow-600">Supabaseに接続できません。</p>
                     </div>
                 </div>
             )}
 
-            {/* ===== Hero Section ===== */}
-            <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/30">
-                {/* Background accent */}
-                <div className="absolute top-0 right-0 w-80 h-80 opacity-[0.07]">
-                    <div
-                        className="w-full h-full rounded-full blur-3xl"
-                        style={{
-                            background: `radial-gradient(circle, ${teamConfig.colors.primary} 0%, ${teamConfig.colors.accent} 100%)`,
-                        }}
+            {/* ===== Hero ===== */}
+            <HeroSection
+                teamName={teamConfig.name}
+                teamShortName={teamConfig.shortName}
+                accentColor={accent}
+                primaryColor={teamConfig.colors.primary}
+                primaryCtaHref={primaryCtaHref}
+                secondaryCtaHref={`/${team_id}/matches`}
+                displayPlayers={displayPlayers}
+            />
+
+            {/* ===== LIVE / NEXT MATCH ===== */}
+            {liveMatches.length > 0 ? (
+                liveMatches.map(match => (
+                    <NextMatchCard
+                        key={match.id}
+                        match={match}
+                        teamId={team_id}
+                        teamName={teamConfig.name}
+                        teamKit={teamConfig.kit}
+                        status="live"
+                        accentColor={accent}
+                        isLive
                     />
-                </div>
-                <div className="absolute bottom-0 left-0 w-40 h-40 opacity-[0.05]">
-                    <div
-                        className="w-full h-full rounded-full blur-2xl"
-                        style={{ backgroundColor: teamConfig.colors.accent }}
-                    />
-                </div>
+                ))
+            ) : nextMatch ? (
+                <NextMatchCard
+                    match={nextMatch}
+                    teamId={team_id}
+                    teamName={teamConfig.name}
+                    teamKit={teamConfig.kit}
+                    status={getDisplayStatus(nextMatch)}
+                    accentColor={accent}
+                />
+            ) : null}
 
-                <div className="relative z-10 p-6 md:p-10 flex flex-col md:flex-row items-center gap-8">
-                    {/* Left: Copy + CTA */}
-                    <div className="flex-1 space-y-5 text-center md:text-left">
-                        <div className="space-y-2">
-                            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight">
-                                <span style={{ color: teamConfig.colors.accent }}>{teamConfig.shortName.toUpperCase()}</span>
-                                {' '}
-                                <span className="text-foreground">PIXEL HUB</span>
-                            </h1>
-                            <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto md:mx-0">
-                                試合後の感情を、採点で残そう。
-                                <br className="hidden sm:block" />
-                                {teamConfig.shortName}ファンのための選手採点コミュニティ。
-                            </p>
-                        </div>
-
-                        {/* CTAs */}
-                        <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                            <Link
-                                href={primaryCtaHref}
-                                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-semibold text-sm transition-all hover:opacity-90 hover:shadow-lg active:scale-[0.98] shadow-md"
-                                style={{ backgroundColor: teamConfig.colors.accent }}
-                            >
-                                <Star className="w-4 h-4" />
-                                最新試合を採点する
-                                <ChevronRight className="w-4 h-4" />
-                            </Link>
-                            <Link
-                                href={secondaryCtaHref}
-                                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium text-sm border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all"
-                            >
-                                <Calendar className="w-4 h-4" />
-                                試合一覧を見る
-                            </Link>
-                        </div>
-                    </div>
-
-                    {/* Right: PixelPlayer decoration */}
-                    <div className="flex items-end gap-1.5 md:gap-2">
-                        {displayPlayers.map((player, index) => (
-                            <div
-                                key={player.id}
-                                className="transform transition-transform hover:scale-110 hover:-translate-y-2"
-                                style={{ transform: `translateY(${Math.abs(index - 2) * 4}px)` }}
-                            >
-                                {player.pixel_config && (
-                                    <PixelPlayer
-                                        config={player.pixel_config as any}
-                                        number={player.number}
-                                        size={index === 2 ? 80 : 64}
-                                    />
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ===== LIVE Match (if any) ===== */}
-            {liveMatches.length > 0 && (
-                <section className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                        </span>
-                        <h2 className="text-xl font-bold text-red-600">LIVE NOW</h2>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {liveMatches.map(match => (
-                            <MatchCard
-                                key={match.id}
-                                id={match.id}
-                                teamId={team_id}
-                                teamName={teamConfig.name}
-                                teamKit={teamConfig.kit}
-                                opponentName={match.opponent_name}
-                                matchDate={match.match_date}
-                                homeScore={match.home_score}
-                                awayScore={match.away_score}
-                                status="live"
-                                competition={match.competition || 'League'}
-                                isHome={match.is_home ?? true}
-                            />
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* ===== NEXT MATCH Highlight ===== */}
-            {nextMatch && liveMatches.length === 0 && (
-                <section className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <Zap className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                        <h2 className="text-xl font-bold">NEXT MATCH</h2>
-                    </div>
-                    <div
-                        className="rounded-xl border-2 overflow-hidden transition-shadow hover:shadow-lg"
-                        style={{ borderColor: `${teamConfig.colors.accent}30` }}
-                    >
-                        <MatchCard
-                            id={nextMatch.id}
-                            teamId={team_id}
-                            teamName={teamConfig.name}
-                            teamKit={teamConfig.kit}
-                            opponentName={nextMatch.opponent_name}
-                            matchDate={nextMatch.match_date}
-                            homeScore={nextMatch.home_score}
-                            awayScore={nextMatch.away_score}
-                            status={getDisplayStatus(nextMatch)}
-                            competition={nextMatch.competition || 'League'}
-                            isHome={nextMatch.is_home ?? true}
-                        />
-                    </div>
-                </section>
-            )}
-
-            {/* ===== Features Block: できること ===== */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-card border border-border rounded-xl p-5 space-y-2 text-center">
-                    <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto"
-                        style={{ backgroundColor: `${teamConfig.colors.accent}15` }}
-                    >
-                        <Star className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                    </div>
-                    <h3 className="font-semibold text-sm">10点満点で選手採点</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        試合ごとに全選手をファン目線で評価。あなたの採点が反映されます。
-                    </p>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-5 space-y-2 text-center">
-                    <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto"
-                        style={{ backgroundColor: `${teamConfig.colors.accent}15` }}
-                    >
-                        <MessageSquare className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                    </div>
-                    <h3 className="font-semibold text-sm">コメントで感想を残せる</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        選手ごとに感想や意見をシェア。試合の振り返りがもっと楽しくなります。
-                    </p>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-5 space-y-2 text-center">
-                    <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto"
-                        style={{ backgroundColor: `${teamConfig.colors.accent}15` }}
-                    >
-                        <Trophy className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                    </div>
-                    <h3 className="font-semibold text-sm">みんなの採点でMVPが見える</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                        ファンの投票結果から、その試合のMVPが分かります。
-                    </p>
-                </div>
-            </section>
+            {/* ===== Features ===== */}
+            <FeatureCards accentColor={accent} />
 
             {/* ===== Recent Results ===== */}
-            <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Calendar className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                        <h2 className="text-xl font-bold">試合結果</h2>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">採点受付中</span>
-                    </div>
-                    {finishedMatches.length > 4 && (
-                        <Link
-                            href={`/${team_id}/matches?filter=finished`}
-                            className="flex items-center gap-1 text-sm hover:underline"
-                            style={{ color: teamConfig.colors.accent }}
-                        >
-                            すべて見る
-                            <ChevronRight className="w-4 h-4" />
-                        </Link>
-                    )}
-                </div>
+            <section className="space-y-5">
+                <SectionHeader
+                    icon={Calendar}
+                    accentColor={accent}
+                    title="試合結果"
+                    badge="採点受付中"
+                    badgeColor={accent}
+                    viewAllHref={finishedMatches.length > 4 ? `/${team_id}/matches?filter=finished` : undefined}
+                />
                 {recentResults.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:gap-5 md:grid-cols-2">
                         {recentResults.map(match => (
                             <MatchCard
                                 key={match.id}
@@ -360,27 +217,30 @@ export default async function TeamHome({ params }: PageProps) {
                                 status={getDisplayStatus(match)}
                                 competition={match.competition || 'League'}
                                 isHome={match.is_home ?? true}
+                                variant="premium"
                             />
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-muted/30 rounded-xl border border-border">
-                        <Calendar className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+                    <div className="text-center py-14 bg-muted/20 rounded-[14px] border border-black/[0.04]">
+                        <Calendar className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
                         <p className="text-muted-foreground font-medium text-sm">まだ試合結果がありません</p>
-                        <p className="text-xs text-muted-foreground/70 mt-1">試合が終了すると、ここに結果が表示されます</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">試合が終了すると、ここに結果が表示されます</p>
                     </div>
                 )}
             </section>
 
-            {/* ===== Pending Matches ===== */}
+            {/* ===== Pending ===== */}
             {pendingMatches.length > 0 && (
-                <section className="space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-orange-500" />
-                        <h2 className="text-xl font-bold">結果待ち</h2>
-                        <span className="text-xs text-muted-foreground bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">キックオフ済み</span>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
+                <section className="space-y-5">
+                    <SectionHeader
+                        icon={Clock}
+                        iconColor="#f97316"
+                        title="結果待ち"
+                        badge="キックオフ済み"
+                        badgeColor="#f97316"
+                    />
+                    <div className="grid gap-4 md:gap-5 md:grid-cols-2">
                         {pendingMatches.map(match => (
                             <MatchCard
                                 key={match.id}
@@ -395,32 +255,23 @@ export default async function TeamHome({ params }: PageProps) {
                                 status={getDisplayStatus(match)}
                                 competition={match.competition || 'League'}
                                 isHome={match.is_home ?? true}
+                                variant="premium"
                             />
                         ))}
                     </div>
                 </section>
             )}
 
-            {/* ===== Upcoming Matches (remaining) ===== */}
+            {/* ===== Upcoming ===== */}
             {remainingUpcoming.length > 0 && (
-                <section className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5" style={{ color: teamConfig.colors.accent }} />
-                            <h2 className="text-xl font-bold">今後の試合</h2>
-                        </div>
-                        {upcomingMatches.length > 5 && (
-                            <Link
-                                href={`/${team_id}/matches?filter=upcoming`}
-                                className="flex items-center gap-1 text-sm hover:underline"
-                                style={{ color: teamConfig.colors.accent }}
-                            >
-                                すべて見る
-                                <ChevronRight className="w-4 h-4" />
-                            </Link>
-                        )}
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
+                <section className="space-y-5">
+                    <SectionHeader
+                        icon={TrendingUp}
+                        accentColor={accent}
+                        title="今後の試合"
+                        viewAllHref={upcomingMatches.length > 5 ? `/${team_id}/matches?filter=upcoming` : undefined}
+                    />
+                    <div className="grid gap-4 md:gap-5 md:grid-cols-2">
                         {remainingUpcoming.map(match => (
                             <MatchCard
                                 key={match.id}
@@ -435,6 +286,7 @@ export default async function TeamHome({ params }: PageProps) {
                                 status={getDisplayStatus(match)}
                                 competition={match.competition || 'League'}
                                 isHome={match.is_home ?? true}
+                                variant="premium"
                             />
                         ))}
                     </div>

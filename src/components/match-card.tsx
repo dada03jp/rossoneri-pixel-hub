@@ -8,6 +8,7 @@ interface TeamKit {
 }
 
 type MatchStatus = 'finished' | 'live' | 'upcoming' | 'pending';
+type MatchCardVariant = 'default' | 'premium';
 
 interface MatchCardProps {
     id: string;
@@ -21,6 +22,7 @@ interface MatchCardProps {
     status: MatchStatus;
     competition: string;
     isHome?: boolean;
+    variant?: MatchCardVariant;
 }
 
 export function MatchCard({
@@ -35,7 +37,9 @@ export function MatchCard({
     status,
     competition,
     isHome = true,
+    variant = 'default',
 }: MatchCardProps) {
+    const isPremium = variant === 'premium';
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         return date.toLocaleDateString('ja-JP', {
@@ -103,7 +107,7 @@ export function MatchCard({
 
     return (
         <Link href={`/${teamId}/matches/${id}`}>
-            <div className="group relative bg-card border border-border rounded-lg p-4 hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer">
+            <div className={`group relative bg-card border rounded-lg p-4 transition-all duration-200 cursor-pointer ${isPremium ? 'border-black/[0.06] rounded-[14px] p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5' : 'border-border hover:border-primary hover:shadow-lg'}`}>
                 {/* Competition Badge + Status */}
                 <div className="flex items-center gap-2 mb-3">
                     <Trophy className="w-4 h-4 text-primary" />
