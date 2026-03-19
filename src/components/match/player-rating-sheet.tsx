@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, Send, MessageCircle, Heart } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Send, MessageCircle, Heart, Pencil, Trash2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { Slider } from '@/components/ui/slider';
@@ -31,6 +31,8 @@ interface CommentData {
     created_at: string;
     likes_count: number;
     user_has_liked: boolean;
+    is_deleted?: boolean;
+    is_edited?: boolean;
 }
 
 interface PlayerRatingSheetProps {
@@ -94,6 +96,10 @@ export function PlayerRatingSheet({
     const [commentsLoading, setCommentsLoading] = useState(false);
     const [showAllComments, setShowAllComments] = useState(false);
 
+    // ★ FIX #6: Comment edit/delete state
+    const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+    const [editCommentText, setEditCommentText] = useState('');
+
     const { team: teamConfig } = useTeam();
 
     // Navigation
@@ -156,17 +162,23 @@ export function PlayerRatingSheet({
             }
 
             const mapped: CommentData[] = ratingsData
-                .filter(r => r.comment && r.comment.trim().length > 0 && !r.is_deleted)
                 .map(r => ({
                     id: r.id,
                     user_id: r.user_id,
                     user_name: r.user_name || 'ミラニスタ',
                     score: r.score,
-                    comment: r.comment || '',
+                    comment: r.is_deleted ? '削除されたコメントです' : (r.comment || ''),
                     created_at: r.created_at,
                     likes_count: likesMap[r.id] || 0,
                     user_has_liked: userLikedSet.has(r.id),
-                }));
+                    is_deleted: !!r.is_deleted,
+                    is_edited: !!r.is_edited,
+                }))
+                .filter(r => {
+                    // Show deleted comments (greyed out) but hide those with no content at all
+                    if (r.is_deleted) return true;
+                    return r.comment && r.comment.trim().length > 0;
+                });
 
             mapped.sort((a, b) => b.likes_count - a.likes_count || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             setComments(mapped);
@@ -214,6 +226,32 @@ export function PlayerRatingSheet({
             await supabase.from('comment_likes').insert({ rating_id: commentId, user_id: user.id });
             setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes_count: c.likes_count + 1, user_has_liked: true } : c));
         }
+    };
+
+    // ★ FIX #6: Edit comment
+    const handleEditComment = async (commentId: string) => {
+        if (!editCommentText.trim()) return;
+        const supabase = createClient();
+        await supabase.from('ratings').update({
+            comment: editCommentText.trim(),
+            is_edited: true,
+        } as Record<string, unknown>).eq('id', commentId);
+        setComments(prev => prev.map(c =>
+            c.id === commentId ? { ...c, comment: editCommentText.trim(), is_edited: true } : c
+        ));
+        setEditingCommentId(null);
+        setEditCommentText('');
+    };
+
+    // ★ FIX #6: Delete comment (soft delete — preserve thread)
+    const handleDeleteComment = async (commentId: string) => {
+        const supabase = createClient();
+        await supabase.from('ratings').update({
+            is_deleted: true,
+        } as Record<string, unknown>).eq('id', commentId);
+        setComments(prev => prev.map(c =>
+            c.id === commentId ? { ...c, comment: '削除されたコメントです', is_deleted: true } : c
+        ));
     };
 
     if (!isOpen || !player) return null;
@@ -394,23 +432,82 @@ export function PlayerRatingSheet({
 
                                 <div className="space-y-1.5">
                                     {displayComments.map(c => (
-                                        <div key={c.id} className="bg-black/[0.02] rounded-[8px] px-2.5 py-2">
+                                        <div key={c.id} className={`rounded-[8px] px-2.5 py-2 ${
+                                            c.is_deleted ? 'bg-black/[0.01] opacity-50' : 'bg-black/[0.02]'
+                                        }`}>
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1.5 text-[11px]">
                                                     <span className="font-medium">{c.user_name}</span>
                                                     <span className={`font-bold tabular-nums ${getScoreColor(c.score)}`}>{c.score.toFixed(1)}</span>
+                                                    {c.is_edited && !c.is_deleted && (
+                                                        <span className="text-[9px] text-muted-foreground">(編集済み)</span>
+                                                    )}
                                                 </div>
-                                                <button
-                                                    onClick={() => handleLike(c.id)}
-                                                    className={`flex items-center gap-0.5 text-[11px] transition-colors ${
-                                                        c.user_has_liked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
-                                                    }`}
-                                                >
-                                                    <Heart className={`w-3 h-3 ${c.user_has_liked ? 'fill-current' : ''}`} />
-                                                    {c.likes_count > 0 && c.likes_count}
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    {/* Edit/Delete for own comments */}
+                                                    {user && c.user_id === user.id && !c.is_deleted && (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingCommentId(c.id);
+                                                                    setEditCommentText(c.comment);
+                                                                }}
+                                                                className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                                                title="編集"
+                                                            >
+                                                                <Pencil className="w-2.5 h-2.5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteComment(c.id)}
+                                                                className="p-0.5 text-muted-foreground hover:text-red-500 transition-colors"
+                                                                title="削除"
+                                                            >
+                                                                <Trash2 className="w-2.5 h-2.5" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {/* Like */}
+                                                    {!c.is_deleted && (
+                                                        <button
+                                                            onClick={() => handleLike(c.id)}
+                                                            className={`flex items-center gap-0.5 text-[11px] transition-colors ${
+                                                                c.user_has_liked ? 'text-red-500' : 'text-muted-foreground hover:text-red-500'
+                                                            }`}
+                                                        >
+                                                            <Heart className={`w-3 h-3 ${c.user_has_liked ? 'fill-current' : ''}`} />
+                                                            {c.likes_count > 0 && c.likes_count}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <p className="text-xs mt-0.5 text-foreground/80">{c.comment}</p>
+                                            {/* Inline edit mode */}
+                                            {editingCommentId === c.id ? (
+                                                <div className="flex gap-1.5 mt-1">
+                                                    <Input
+                                                        value={editCommentText}
+                                                        onChange={(e) => setEditCommentText(e.target.value)}
+                                                        className="text-xs h-7 rounded-md border-black/[0.08] flex-1"
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleEditComment(c.id); }}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        onClick={() => handleEditComment(c.id)}
+                                                        className="p-1 text-emerald-600 hover:text-emerald-700"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { setEditingCommentId(null); setEditCommentText(''); }}
+                                                        className="p-1 text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <p className={`text-xs mt-0.5 ${
+                                                    c.is_deleted ? 'italic text-muted-foreground' : 'text-foreground/80'
+                                                }`}>{c.comment}</p>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

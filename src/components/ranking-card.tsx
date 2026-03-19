@@ -4,6 +4,7 @@ import { PixelPlayer, PixelConfig } from '@/components/pixel-player';
 import { Trophy, TrendingUp, Medal } from 'lucide-react';
 import { useMemo } from 'react';
 import { Player } from '@/types/database';
+import { useTeam } from '@/contexts/team-context';
 
 interface PlayerRanking {
     player: Player & { pixel_config: PixelConfig };
@@ -17,9 +18,16 @@ interface RankingCardProps {
     players: (Player & { pixel_config: PixelConfig })[];
     ratings: Record<string, { average: number; count: number }>;
     limit?: number;
+    isHome?: boolean;
 }
 
-export function RankingCard({ title, players, ratings, limit = 5 }: RankingCardProps) {
+export function RankingCard({ title, players, ratings, limit = 5, isHome = true }: RankingCardProps) {
+    const { team: teamConfig } = useTeam();
+    const kitColors = useMemo(() => {
+        return isHome
+            ? { primary: teamConfig.kit.home.primary, secondary: teamConfig.kit.home.secondary }
+            : { primary: teamConfig.kit.away.primary, secondary: teamConfig.kit.away.secondary };
+    }, [isHome, teamConfig]);
     const rankedPlayers = useMemo(() => {
         const playersWithRatings: PlayerRanking[] = players
             .filter(player => ratings[player.id])
@@ -86,6 +94,7 @@ export function RankingCard({ title, players, ratings, limit = 5 }: RankingCardP
                                 config={player.pixel_config}
                                 number={player.number}
                                 size={40}
+                                kitColors={kitColors}
                             />
                         )}
 
@@ -120,6 +129,7 @@ interface TopRatedBannerProps {
     } | null;
     onShowComments?: () => void;
     totalComments?: number;
+    isHome?: boolean;
 }
 
 interface TopPlayerData {
@@ -133,8 +143,15 @@ export function TopRatedBanner({
     ratings,
     topComment,
     onShowComments,
-    totalComments = 0
+    totalComments = 0,
+    isHome = true,
 }: TopRatedBannerProps) {
+    const { team: teamConfig } = useTeam();
+    const kitColors = useMemo(() => {
+        return isHome
+            ? { primary: teamConfig.kit.home.primary, secondary: teamConfig.kit.home.secondary }
+            : { primary: teamConfig.kit.away.primary, secondary: teamConfig.kit.away.secondary };
+    }, [isHome, teamConfig]);
     const topPlayer = useMemo((): TopPlayerData | null => {
         let best: TopPlayerData | null = null;
 
@@ -165,6 +182,7 @@ export function TopRatedBanner({
                         config={topPlayer.player.pixel_config}
                         number={topPlayer.player.number}
                         size={48}
+                        kitColors={kitColors}
                     />
                 )}
 

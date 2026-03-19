@@ -184,11 +184,17 @@ export function MatchDetailClient({
         return entries.reduce((best, cur) => (cur.score! > best.score! ? cur : best)).id;
     }, [pitchPlayers, ratings, ratingViewMode, user, getUserRatings]);
 
-    // User scores flat map
+    // User scores flat map — merge realtime store + local optimistic state
     const userScoresMap = useMemo(() => {
         if (!user) return {};
-        return getUserRatings(user.id);
-    }, [user, getUserRatings]);
+        const fromStore = getUserRatings(user.id);
+        // ★ FIX #4: Merge local userRatings (from submit) into map too
+        const merged = { ...fromStore };
+        for (const [playerId, rating] of Object.entries(userRatings)) {
+            merged[playerId] = rating.score;
+        }
+        return merged;
+    }, [user, getUserRatings, userRatings]);
 
     // Match average
     const matchAverageRating = useMemo(() => {
@@ -349,6 +355,15 @@ export function MatchDetailClient({
 
                         {/* ── 3. Formation Pitch (main) ── */}
                         <div className="relative z-0">
+                            {/* ★ FIX #3: Hint text ABOVE pitch — visible CTA, not buried */}
+                            {Object.keys(userScoresMap).length === 0 && match.status === 'finished' && (
+                                <div className="text-center mb-3 py-2 px-4 bg-emerald-50 border border-emerald-200/50 rounded-[12px]">
+                                    <p className="text-sm font-medium text-emerald-700 flex items-center justify-center gap-2">
+                                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        選手をタップして採点を始めよう
+                                    </p>
+                                </div>
+                            )}
                             <p className="text-xs text-muted-foreground mb-2 text-center">
                                 {match.formation ? `フォーメーション ${match.formation}` : 'フォーメーション'}
                             </p>
@@ -365,13 +380,6 @@ export function MatchDetailClient({
                                     onPlayerSelect={(id) => setSelectedPlayerId(id)}
                                 />
                             </div>
-                            {/* Hint text — below pitch, not overlapping */}
-                            {Object.keys(userRatings).length === 0 && (
-                                <p className="text-center text-xs text-muted-foreground mt-3 flex items-center justify-center gap-1.5">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    ピッチ上の選手をタップして採点を始めましょう
-                                </p>
-                            )}
                         </div>
 
                         {/* ── 4. Substitute Chips ── */}
@@ -407,6 +415,7 @@ export function MatchDetailClient({
                             <TopRatedBanner
                                 players={players}
                                 ratings={ratings}
+                                isHome={match.is_home ?? true}
                                 topComment={(() => {
                                     let bestPlayer: Player | null = null;
                                     let bestRating = -1;
@@ -445,7 +454,7 @@ export function MatchDetailClient({
 
                         {/* ── 6. Ranking ── */}
                         {Object.keys(ratings).length > 0 && (
-                            <RankingCard title="今試合の評価ランキング" players={players} ratings={ratings} limit={5} />
+                            <RankingCard title="今試合の評価ランキング" players={players} ratings={ratings} limit={5} isHome={match.is_home ?? true} />
                         )}
                     </div>
                 ) : (

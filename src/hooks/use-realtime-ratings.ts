@@ -35,8 +35,21 @@ interface UseRealtimeRatingsOptions {
  */
 type ScoreStore = Record<string, Map<string, number>>;
 
+// ★ FIX #4: Track per-user scores independently from comments
+// Maps player_id -> Map<user_id, { ratingId, score }>
+type UserScoreEntry = { ratingId: string; score: number };
+type UserScoreStore = Record<string, Map<string, UserScoreEntry>>;
+
 function cloneStore(store: ScoreStore): ScoreStore {
     const cloned: ScoreStore = {};
+    for (const [key, map] of Object.entries(store)) {
+        cloned[key] = new Map(map);
+    }
+    return cloned;
+}
+
+function cloneUserScoreStore(store: UserScoreStore): UserScoreStore {
+    const cloned: UserScoreStore = {};
     for (const [key, map] of Object.entries(store)) {
         cloned[key] = new Map(map);
     }
@@ -69,6 +82,8 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
 
     // 内部スコアストア（ref で保持し delta 計算の元データとする）
     const scoreStoreRef = useRef<ScoreStore>({});
+    // ★ FIX #4: per-user score store (player_id -> user_id -> score)
+    const userScoreStoreRef = useRef<UserScoreStore>({});
     const isMounted = useRef(true);
     const initializedRef = useRef(false);
 
@@ -87,16 +102,21 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
 
         const { data: ratingsData, error: ratingsError } = await supabase
             .from('ratings')
-            .select('id, player_id, score')
+            .select('id, player_id, user_id, score')
             .eq('match_id', matchId);
 
         if (!ratingsError && ratingsData) {
             const newStore: ScoreStore = {};
-            ratingsData.forEach((r: { id: string; player_id: string; score: number }) => {
+            const newUserStore: UserScoreStore = {};
+            ratingsData.forEach((r: { id: string; player_id: string; user_id: string; score: number }) => {
                 if (!newStore[r.player_id]) newStore[r.player_id] = new Map();
                 newStore[r.player_id].set(r.id, r.score);
+                // ★ FIX #4: track per-user scores
+                if (!newUserStore[r.player_id]) newUserStore[r.player_id] = new Map();
+                newUserStore[r.player_id].set(r.user_id, { ratingId: r.id, score: r.score });
             });
             scoreStoreRef.current = newStore;
+            userScoreStoreRef.current = newUserStore;
             if (isMounted.current) {
                 setRatings(buildRatingData(newStore));
             }
@@ -160,6 +180,14 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             return newStore;
         });
 
+        // ★ FIX #4: track per-user scores on INSERT
+        if (row.user_id) {
+            const uStore = cloneUserScoreStore(userScoreStoreRef.current);
+            if (!uStore[row.player_id]) uStore[row.player_id] = new Map();
+            uStore[row.player_id].set(row.user_id, { ratingId: row.id, score: row.score });
+            userScoreStoreRef.current = uStore;
+        }
+
         // コメントがあれば追加（既存配列をスプレッドし先頭に追加）
         if (row.comment && row.comment.trim() !== '') {
             setComments(prev => {
@@ -203,6 +231,14 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             newStore[row.player_id].set(row.id, row.score);
             return newStore;
         });
+
+        // ★ FIX #4: track per-user scores on UPDATE
+        if (row.user_id) {
+            const uStore = cloneUserScoreStore(userScoreStoreRef.current);
+            if (!uStore[row.player_id]) uStore[row.player_id] = new Map();
+            uStore[row.player_id].set(row.user_id, { ratingId: row.id, score: row.score });
+            userScoreStoreRef.current = uStore;
+        }
 
         // コメント更新（既存配列を正しくスプレッド）
         setComments(prev => {
@@ -251,9 +287,21 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
         updateStore((store) => {
             const newStore = cloneStore(store);
             if (!newStore[playerId]) newStore[playerId] = new Map();
+            // ★ FIX #5: remove old entry for same user before adding new
+            // Find and remove existing ratingId for this user in this player
+            const userEntry = userScoreStoreRef.current[playerId]?.get(userId);
+            if (userEntry) {
+                newStore[playerId].delete(userEntry.ratingId);
+            }
             newStore[playerId].set(ratingId, score);
             return newStore;
         });
+
+        // ★ FIX #4+#5: update user score store
+        const uStore = cloneUserScoreStore(userScoreStoreRef.current);
+        if (!uStore[playerId]) uStore[playerId] = new Map();
+        uStore[playerId].set(userId, { ratingId, score });
+        userScoreStoreRef.current = uStore;
 
         // コメントも即時反映（既存コメントを保持）
         if (comment.trim() !== '') {
@@ -342,18 +390,18 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
         };
     }, [matchId, fetchAll, mergeInsert, mergeUpdate]);
 
-    // ======== ユーザー個別スコア取得 ========
+    // ★ FIX #4: Get user ratings from userScoreStore, NOT from comments
     const getUserRatings = useCallback((userId: string): Record<string, number> => {
         const result: Record<string, number> = {};
-        // comments からユーザーのスコアを取り出す
-        for (const [playerId, playerComments] of Object.entries(comments)) {
-            const userComment = playerComments.find(c => c.userId === userId);
-            if (userComment) {
-                result[playerId] = userComment.score;
+        for (const [playerId, userMap] of Object.entries(userScoreStoreRef.current)) {
+            const entry = userMap.get(userId);
+            if (entry) {
+                result[playerId] = entry.score;
             }
         }
         return result;
-    }, [comments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ratings]); // depend on ratings so it re-computes when store changes
 
     return {
         ratings,

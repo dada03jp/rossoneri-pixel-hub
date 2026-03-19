@@ -28,9 +28,16 @@ export function PixelBurst({
     particleCount = 28,
 }: PixelBurstProps) {
     const [particles, setParticles] = useState<Particle[]>([]);
+    // ★ ROOT CAUSE FIX: Only fire when trigger actually INCREMENTS (not on reset to 0)
+    const prevTriggerRef = useRef(trigger);
 
     useEffect(() => {
-        if (trigger === 0) return;
+        // ONLY fire if trigger increased from previous value
+        if (trigger <= prevTriggerRef.current || trigger === 0) {
+            prevTriggerRef.current = trigger;
+            return;
+        }
+        prevTriggerRef.current = trigger;
 
         const newParticles: Particle[] = [];
         for (let i = 0; i < particleCount; i++) {
@@ -39,7 +46,7 @@ export function PixelBurst({
             newParticles.push({
                 id: i,
                 x: 45 + (Math.random() - 0.5) * 30,
-                y: 65 + (Math.random() - 0.5) * 15, // スライダー周辺 (下寄り)
+                y: 65 + (Math.random() - 0.5) * 15,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed - 25,
                 color: colors[i % 2],
@@ -376,16 +383,21 @@ interface EmojiCrackerBurstProps {
 
 export function EmojiCrackerBurst({ trigger, score }: EmojiCrackerBurstProps) {
     const [particles, setParticles] = useState<EmojiParticle[]>([]);
+    // ★ ROOT CAUSE FIX: Only fire when trigger actually INCREMENTS
+    const prevTriggerRef = useRef(trigger);
 
     useEffect(() => {
-        if (trigger === 0) return;
+        if (trigger <= prevTriggerRef.current || trigger === 0) {
+            prevTriggerRef.current = trigger;
+            return;
+        }
+        prevTriggerRef.current = trigger;
 
         const emojis = getScoreEmojis(score);
         const count = 14;
         const newParticles: EmojiParticle[] = [];
 
         for (let i = 0; i < count; i++) {
-            // クラッカー型: 上方向を中心に扇状に広がる (-150° ~ -30°)
             const baseAngle = -Math.PI * 0.83 + (Math.PI * 0.67 * i) / count;
             const angle = baseAngle + (Math.random() - 0.5) * 0.4;
             newParticles.push({
