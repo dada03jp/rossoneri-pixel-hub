@@ -3,6 +3,7 @@
 import { Trophy, Calendar, Star, Share2, Download } from 'lucide-react';
 import { useTeam } from '@/contexts/team-context';
 import { getTeamColors } from '@/lib/team-colors';
+import { getScoreColor } from '@/lib/score-color';
 import { Match, MatchEvent } from '@/types/database';
 
 interface MatchHeroProps {
@@ -117,17 +118,13 @@ export function MatchHero({ match, events, matchAverageRating, userRatingsCount,
                             <>
                                 <div className="flex items-center gap-3 text-4xl md:text-5xl font-bold tabular-nums">
                                     <span className={
-                                        (match.is_home && match.home_score! > match.away_score!) ||
-                                        (!match.is_home && match.away_score! > match.home_score!)
-                                            ? 'text-foreground' : 'text-muted-foreground/50'
+                                        getScoreColor(match.home_score!, match.away_score!, 'home') || 'text-foreground'
                                     }>
                                         {match.home_score}
                                     </span>
                                     <span className="text-muted-foreground/30 text-2xl">-</span>
                                     <span className={
-                                        (!match.is_home && match.home_score! > match.away_score!) ||
-                                        (match.is_home && match.away_score! > match.home_score!)
-                                            ? 'text-foreground' : 'text-muted-foreground/50'
+                                        getScoreColor(match.home_score!, match.away_score!, 'away') || 'text-foreground'
                                     }>
                                         {match.away_score}
                                     </span>

@@ -122,33 +122,30 @@ export function useRealtimeRatings({ matchId, initialRatings }: UseRealtimeRatin
             }
         }
 
+        // ★ コメント fetch: rating_comments テーブルから取得
+        // rating_comments.rating_id → ratings.id で player_id を特定
         const { data: commentsData, error: commentsError } = await supabase
-            .from('ratings')
-            .select('id, player_id, user_id, user_name, score, comment, created_at')
-            .eq('match_id', matchId)
-            .neq('comment', '')
+            .from('rating_comments')
+            .select('id, rating_id, user_id, user_name, comment, is_deleted, is_edited, parent_comment_id, created_at, ratings!inner(player_id, score)')
+            .in('rating_id', ratingsData ? ratingsData.map((r: any) => r.id) : [])
+            .is('parent_comment_id', null) // root comments only
             .order('created_at', { ascending: false });
 
         if (!commentsError && commentsData && isMounted.current) {
             const processed: Record<string, ProcessedComment[]> = {};
-            commentsData.forEach((c: {
-                id: string;
-                player_id: string;
-                user_id: string;
-                user_name: string | null;
-                score: number;
-                comment: string;
-                created_at: string;
-            }) => {
-                if (!processed[c.player_id]) processed[c.player_id] = [];
-                processed[c.player_id].push({
+            commentsData.forEach((c: any) => {
+                const playerId = c.ratings?.player_id;
+                const score = c.ratings?.score;
+                if (!playerId) return;
+                if (!processed[playerId]) processed[playerId] = [];
+                processed[playerId].push({
                     id: c.id,
-                    playerId: c.player_id,
+                    playerId: playerId,
                     playerName: '',
                     userId: c.user_id,
                     userName: c.user_name || 'ファン',
-                    score: c.score,
-                    comment: c.comment,
+                    score: score || 0,
+                    comment: c.is_deleted ? '削除されたコメントです' : c.comment,
                     createdAt: c.created_at,
                     likesCount: 0,
                     hasLiked: false,

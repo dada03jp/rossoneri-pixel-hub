@@ -67,6 +67,8 @@ export function MatchDetailClient({
     const [userRatings, setUserRatings] = useState<Record<string, { score: number; comment: string }>>({});
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    // ★ CTA source of truth: auth確認 + DB fetch完了フラグ
+    const [authLoaded, setAuthLoaded] = useState(false);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
     const [showShareCard, setShowShareCard] = useState(false);
@@ -81,17 +83,20 @@ export function MatchDetailClient({
             setUser(user);
             setLoading(false);
             if (user) {
-                supabase.from('ratings').select('*')
-                    .eq('user_id', user.id).eq('match_id', match.id)
-                    .then(({ data }) => {
-                        if (data) {
-                            const existing: Record<string, { score: number; comment: string }> = {};
-                            data.forEach((r: any) => {
-                                existing[r.player_id] = { score: r.score, comment: r.comment || '' };
-                            });
-                            setUserRatings(existing);
-                        }
-                    });
+                Promise.resolve(
+                    supabase.from('ratings').select('*')
+                        .eq('user_id', user.id).eq('match_id', match.id)
+                ).then(({ data }) => {
+                    if (data) {
+                        const existing: Record<string, { score: number; comment: string }> = {};
+                        data.forEach((r: any) => {
+                            existing[r.player_id] = { score: r.score, comment: r.comment || '' };
+                        });
+                        setUserRatings(existing);
+                    }
+                }).finally(() => setAuthLoaded(true));
+            } else {
+                setAuthLoaded(true);
             }
         });
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -214,29 +219,58 @@ export function MatchDetailClient({
         optimisticSubmit(tempId, playerId, score, comment, userName, user.id);
 
         const supabase = createClient();
-        const { error } = await supabase.from('ratings').upsert({
+
+        // ★ 採点: ratings テーブル (score のみ、comment は分離)
+        const { data: ratingData, error } = await supabase.from('ratings').upsert({
             user_id: user.id,
             match_id: match.id,
             player_id: playerId,
             score,
-            comment: comment || null,
             user_name: userName,
-            // ★ FIX #3/#6: Reset deletion/edit flags on re-submit
-            is_deleted: false,
-            is_edited: false,
-        } as Record<string, unknown>, { onConflict: 'user_id,match_id,player_id' });
+        } as Record<string, unknown>, { onConflict: 'user_id,match_id,player_id' }).select('id').single();
 
-        if (error) {
+        if (error || !ratingData) {
             console.error('Error submitting rating:', error);
             alert('採点の保存に失敗しました');
             return;
         }
+
+        // ★ コメント: rating_comments テーブルに分離書き込み
+        if (comment && comment.trim()) {
+            // 既存 root comment があれば update、なければ insert
+            const { data: existingComment } = await supabase
+                .from('rating_comments')
+                .select('id')
+                .eq('rating_id', ratingData.id)
+                .is('parent_comment_id', null)
+                .maybeSingle();
+
+            if (existingComment) {
+                await supabase.from('rating_comments').update({
+                    comment: comment.trim(),
+                    user_name: userName,
+                    is_deleted: false,
+                    is_edited: true,
+                    edited_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                }).eq('id', existingComment.id);
+            } else {
+                await supabase.from('rating_comments').insert({
+                    rating_id: ratingData.id,
+                    user_id: user.id,
+                    user_name: userName,
+                    comment: comment.trim(),
+                });
+            }
+        }
+
         setUserRatings(prev => ({ ...prev, [playerId]: { score, comment } }));
     };
 
-    // Nearby matches — include finished matches for rating + upcoming for awareness
+    // Nearby matches — 採点可能(finished)のみ表示
     const sortedNearbyMatches = useMemo(() => {
         return nearbyMatches
+            .filter(m => m.status === 'finished')
             .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
             .slice(0, 4);
     }, [nearbyMatches]);
@@ -364,11 +398,11 @@ export function MatchDetailClient({
                                 - ログイン済: userScoresMapが空(=未採点)の場合のみ表示
                                 - 採点後は自動的に消える (userScoresMapにキーが入る)
                             */}
+                            {/* ★ CTA: authLoaded + userRatings が source of truth */}
                             {(() => {
-                                if (loading) return null;
+                                if (!authLoaded) return null;
                                 if (match.status !== 'finished') return null;
-                                const hasRated = user && Object.keys(userScoresMap).length > 0;
-                                if (hasRated) return null;
+                                if (user && Object.keys(userRatings).length > 0) return null;
                                 return (
                                     <div className="text-center mb-3 py-2 px-4 bg-emerald-50 border border-emerald-200/50 rounded-[12px]">
                                         <p className="text-sm font-medium text-emerald-700 flex items-center justify-center gap-2">

@@ -154,8 +154,9 @@ async function getNearbyMatches(currentMatchId: string) {
             .from('matches')
             .select('id, opponent_name, match_date, status, home_score, away_score, is_home, competition')
             .neq('id', currentMatchId)
+            .eq('status', 'finished')
             .order('match_date', { ascending: false })
-            .limit(6);
+            .limit(8);
         if (error) return [];
         return data || [];
     } catch {

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Calendar, Trophy } from 'lucide-react';
 import { getTeamColors } from '@/lib/team-colors';
+import { getScoreColor } from '@/lib/score-color';
 
 interface TeamKit {
     home: { primary: string; secondary: string; stripe: boolean };
@@ -148,11 +149,11 @@ export function MatchCard({
                     <div className="flex items-center gap-2 px-4">
                         {isFinished ? (
                             <div className="flex items-center gap-2 text-2xl font-bold">
-                                <span className={homeScore !== null && awayScore !== null && homeScore > awayScore ? 'text-primary' : ''}>
+                                <span className={homeScore !== null && awayScore !== null ? getScoreColor(homeScore, awayScore, 'home') : ''}>
                                     {homeScore ?? '-'}
                                 </span>
                                 <span className="text-muted-foreground">-</span>
-                                <span className={homeScore !== null && awayScore !== null && awayScore > homeScore ? 'text-primary' : ''}>
+                                <span className={homeScore !== null && awayScore !== null ? getScoreColor(homeScore, awayScore, 'away') : ''}>
                                     {awayScore ?? '-'}
                                 </span>
                             </div>

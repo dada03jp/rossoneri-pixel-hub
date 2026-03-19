@@ -171,9 +171,9 @@ export function FormationPitch({
                                    so they cannot interfere with neighboring node hit areas. */
                                 transform: 'translate(-50%, -50%)',
                                 zIndex: baseZ,
-                                /* Fix: width/height = exact icon size, no bloat from labels */
-                                width: '36px',
-                                height: '36px',
+                                /* Fix: width/height = icon size (48px mobile, scales up) */
+                                width: '48px',
+                                height: '48px',
                             }}
                             onClick={() => onPlayerSelect(player.id)}
                         >
@@ -189,13 +189,13 @@ export function FormationPitch({
                                     <div className="absolute -inset-1 rounded-full border-2 border-white/70 animate-pulse pointer-events-none" />
                                 )}
 
-                                {/* Player icon — responsive: 36px mobile, 48px sm+ */}
-                                <div className={`w-9 h-9 sm:w-12 sm:h-12 flex-shrink-0 ${
+                                {/* Player icon — responsive: 48px mobile, 56px sm+ */}
+                                <div className={`w-12 h-12 sm:w-14 sm:h-14 flex-shrink-0 ${
                                     isMvp ? 'drop-shadow-[0_0_6px_rgba(250,204,21,0.4)]' : 'drop-shadow-[0_2px_3px_rgba(0,0,0,0.25)]'
                                 }`}>
                                     {player.pixel_config ? (
                                         <div className="w-full h-full" style={{ imageRendering: 'pixelated' as any }}>
-                                            <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={48} kitColors={kitColors} />
+                                            <PixelPlayer config={player.pixel_config as PixelConfig} number={player.number} size={56} kitColors={kitColors} />
                                         </div>
                                     ) : (
                                         <div className="w-full h-full rounded-full bg-white/25 flex items-center justify-center text-white text-[10px] font-bold">
@@ -208,13 +208,13 @@ export function FormationPitch({
                                     pointer-events-none ensures they never block neighbor clicks.
                                     top-full + mt-0.5 places them just below the icon. */}
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-0.5 flex flex-col items-center pointer-events-none" style={{ gap: '1px', width: 'max-content' }}>
-                                    <span className={`whitespace-nowrap text-[8px] sm:text-[10px] font-semibold px-1 py-px rounded leading-none ${
+                                    <span className={`whitespace-nowrap text-[9px] sm:text-[11px] font-semibold px-1 py-px rounded leading-none ${
                                         isMvp ? 'bg-amber-400/95 text-black' : 'bg-black/65 text-white'
                                     }`}>
                                         {getDisplayName(player.name)}
                                     </span>
 
-                                    <span className={`text-[8px] sm:text-[10px] font-bold px-1 py-px rounded leading-none tabular-nums ${
+                                    <span className={`text-[9px] sm:text-[11px] font-bold px-1 py-px rounded leading-none tabular-nums ${
                                         hasScore
                                             ? isMvp ? 'bg-amber-400 text-black' : getScoreBadgeClasses(score!)
                                             : 'bg-white/20 text-white/60'

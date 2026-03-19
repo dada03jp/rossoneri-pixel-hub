@@ -139,34 +139,50 @@ export function PlayerRatingSheet({
         setCommentsLoading(true);
         try {
             const supabase = createClient();
-            const { data: ratingsData } = await supabase
-                .from('ratings').select('*')
-                .eq('match_id', matchId).eq('player_id', playerId)
-                .not('comment', 'is', null);
+            // ★ rating_comments から取得 (root commentのみ = parent_comment_id IS NULL)
+            // rating_id を使って ratings から player_id を絞り込み
+            const { data: ratingsForPlayer } = await supabase
+                .from('ratings').select('id')
+                .eq('match_id', matchId).eq('player_id', playerId);
 
-            if (!ratingsData) { setComments([]); setCommentsLoading(false); return; }
+            if (!ratingsForPlayer || ratingsForPlayer.length === 0) {
+                setComments([]); setCommentsLoading(false); return;
+            }
 
-            const ratingIds = ratingsData.map(r => r.id);
+            const ratingIds = ratingsForPlayer.map(r => r.id);
+
+            const { data: commentsData } = await supabase
+                .from('rating_comments')
+                .select('id, rating_id, user_id, user_name, comment, is_deleted, is_edited, parent_comment_id, created_at, ratings!inner(score)')
+                .in('rating_id', ratingIds)
+                .is('parent_comment_id', null) // root comments only
+                .order('created_at', { ascending: false });
+
+            if (!commentsData) { setComments([]); setCommentsLoading(false); return; }
+
+            // ★ likes は root comment のみ対象。reply には likes を付けない/読まない。
+            const commentIds = commentsData.map(c => c.id);
             let likesMap: Record<string, number> = {};
             let userLikedSet = new Set<string>();
 
-            if (ratingIds.length > 0) {
+            if (commentIds.length > 0) {
                 const { data: likes } = await supabase
-                    .from('comment_likes').select('*').in('rating_id', ratingIds);
+                    .from('comment_likes').select('*')
+                    .in('comment_id', commentIds); // ★ comment_id を唯一の参照先として使用
                 if (likes) {
-                    likes.forEach(l => {
-                        likesMap[l.rating_id] = (likesMap[l.rating_id] || 0) + 1;
-                        if (user && l.user_id === user.id) userLikedSet.add(l.rating_id);
+                    likes.forEach((l: any) => {
+                        likesMap[l.comment_id] = (likesMap[l.comment_id] || 0) + 1;
+                        if (user && l.user_id === user.id) userLikedSet.add(l.comment_id);
                     });
                 }
             }
 
-            const mapped: CommentData[] = ratingsData
-                .map(r => ({
+            const mapped: CommentData[] = commentsData
+                .map((r: any) => ({
                     id: r.id,
                     user_id: r.user_id,
                     user_name: r.user_name || 'ミラニスタ',
-                    score: r.score,
+                    score: r.ratings?.score || 0,
                     comment: r.is_deleted ? '削除されたコメントです' : (r.comment || ''),
                     created_at: r.created_at,
                     likes_count: likesMap[r.id] || 0,
@@ -175,7 +191,6 @@ export function PlayerRatingSheet({
                     is_edited: !!r.is_edited,
                 }))
                 .filter(r => {
-                    // Show deleted comments (greyed out) but hide those with no content at all
                     if (r.is_deleted) return true;
                     return r.comment && r.comment.trim().length > 0;
                 });
@@ -213,6 +228,7 @@ export function PlayerRatingSheet({
         }
     };
 
+    // ★ likes は root comment のみ。comment_id を唯一の参照先として使用。
     const handleLike = async (commentId: string) => {
         if (!user) { onAuthAction(); return; }
         const supabase = createClient();
@@ -220,22 +236,25 @@ export function PlayerRatingSheet({
         if (!target) return;
 
         if (target.user_has_liked) {
-            await supabase.from('comment_likes').delete().eq('rating_id', commentId).eq('user_id', user.id);
+            await supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', user.id);
             setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes_count: c.likes_count - 1, user_has_liked: false } : c));
         } else {
-            await supabase.from('comment_likes').insert({ rating_id: commentId, user_id: user.id });
+            await supabase.from('comment_likes').insert({ comment_id: commentId, user_id: user.id });
             setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes_count: c.likes_count + 1, user_has_liked: true } : c));
         }
     };
 
-    // ★ FIX #6: Edit comment
+    // ★ コメント編集: rating_comments テーブルを更新
+    // タイムスタンプルール: is_edited=true, edited_at=NOW(), updated_at=NOW()
     const handleEditComment = async (commentId: string) => {
         if (!editCommentText.trim()) return;
         const supabase = createClient();
-        await supabase.from('ratings').update({
+        await supabase.from('rating_comments').update({
             comment: editCommentText.trim(),
             is_edited: true,
-        } as Record<string, unknown>).eq('id', commentId);
+            edited_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).eq('id', commentId);
         setComments(prev => prev.map(c =>
             c.id === commentId ? { ...c, comment: editCommentText.trim(), is_edited: true } : c
         ));
@@ -243,17 +262,21 @@ export function PlayerRatingSheet({
         setEditCommentText('');
     };
 
-    // ★ FIX #6: Delete comment (soft delete — preserve thread)
+    // ★ コメント削除: rating_comments テーブルを soft delete
+    // タイムスタンプルール: is_deleted=true, deleted_at=NOW(), updated_at=NOW()
+    // comment は tombstone テキストに置換
     const handleDeleteComment = async (commentId: string) => {
         const supabase = createClient();
-        await supabase.from('ratings').update({
+        await supabase.from('rating_comments').update({
             is_deleted: true,
-            comment: null,
-        } as Record<string, unknown>).eq('id', commentId);
+            comment: '削除されたコメントです',
+            deleted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        }).eq('id', commentId);
         setComments(prev => prev.map(c =>
             c.id === commentId ? { ...c, comment: '削除されたコメントです', is_deleted: true } : c
         ));
-        // ★ FIX #3: Reset comment field so user can re-post
+        // Reset comment field so user can re-post
         if (user && comments.find(c => c.id === commentId)?.user_id === user.id) {
             setComment('');
         }
