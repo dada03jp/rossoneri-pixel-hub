@@ -221,6 +221,9 @@ export function MatchDetailClient({
             score,
             comment: comment || null,
             user_name: userName,
+            // ★ FIX #3/#6: Reset deletion/edit flags on re-submit
+            is_deleted: false,
+            is_edited: false,
         } as Record<string, unknown>, { onConflict: 'user_id,match_id,player_id' });
 
         if (error) {
@@ -231,10 +234,10 @@ export function MatchDetailClient({
         setUserRatings(prev => ({ ...prev, [playerId]: { score, comment } }));
     };
 
-    // Nearby matches — only finished matches (to drive engagement, not show upcoming)
+    // Nearby matches — include finished matches for rating + upcoming for awareness
     const sortedNearbyMatches = useMemo(() => {
         return nearbyMatches
-            .filter(m => m.status === 'finished')
+            .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
             .slice(0, 4);
     }, [nearbyMatches]);
 
@@ -355,15 +358,26 @@ export function MatchDetailClient({
 
                         {/* ── 3. Formation Pitch (main) ── */}
                         <div className="relative z-0">
-                            {/* ★ FIX #3: Hint text ABOVE pitch — visible CTA, not buried */}
-                            {Object.keys(userScoresMap).length === 0 && match.status === 'finished' && (
-                                <div className="text-center mb-3 py-2 px-4 bg-emerald-50 border border-emerald-200/50 rounded-[12px]">
-                                    <p className="text-sm font-medium text-emerald-700 flex items-center justify-center gap-2">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                        選手をタップして採点を始めよう
-                                    </p>
-                                </div>
-                            )}
+                            {/* ★ FIX #1: CTA安定表示条件:
+                                - loading中は非表示 (hydration不安定→state不確定→一瞬出て消える原因)
+                                - 未ログイン: 常にCTA表示
+                                - ログイン済: userScoresMapが空(=未採点)の場合のみ表示
+                                - 採点後は自動的に消える (userScoresMapにキーが入る)
+                            */}
+                            {(() => {
+                                if (loading) return null;
+                                if (match.status !== 'finished') return null;
+                                const hasRated = user && Object.keys(userScoresMap).length > 0;
+                                if (hasRated) return null;
+                                return (
+                                    <div className="text-center mb-3 py-2 px-4 bg-emerald-50 border border-emerald-200/50 rounded-[12px]">
+                                        <p className="text-sm font-medium text-emerald-700 flex items-center justify-center gap-2">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            {user ? '選手をタップして採点を始めよう' : 'ログインして選手を採点しよう'}
+                                        </p>
+                                    </div>
+                                );
+                            })()}
                             <p className="text-xs text-muted-foreground mb-2 text-center">
                                 {match.formation ? `フォーメーション ${match.formation}` : 'フォーメーション'}
                             </p>

@@ -248,10 +248,15 @@ export function PlayerRatingSheet({
         const supabase = createClient();
         await supabase.from('ratings').update({
             is_deleted: true,
+            comment: null,
         } as Record<string, unknown>).eq('id', commentId);
         setComments(prev => prev.map(c =>
             c.id === commentId ? { ...c, comment: '削除されたコメントです', is_deleted: true } : c
         ));
+        // ★ FIX #3: Reset comment field so user can re-post
+        if (user && comments.find(c => c.id === commentId)?.user_id === user.id) {
+            setComment('');
+        }
     };
 
     if (!isOpen || !player) return null;
