@@ -225,12 +225,11 @@ export function MatchDetailClient({
         setUserRatings(prev => ({ ...prev, [playerId]: { score, comment } }));
     };
 
-    // Nearby matches — prioritize unrated finished matches
+    // Nearby matches — only finished matches (to drive engagement, not show upcoming)
     const sortedNearbyMatches = useMemo(() => {
-        const finished = nearbyMatches.filter(m => m.status === 'finished');
-        const upcoming = nearbyMatches.filter(m => m.status !== 'finished');
-        // Simple sort: finished first (most recent), then upcoming
-        return [...finished.slice(0, 4), ...upcoming.slice(0, 2)];
+        return nearbyMatches
+            .filter(m => m.status === 'finished')
+            .slice(0, 4);
     }, [nearbyMatches]);
 
     // Selected player info for sheet
@@ -243,7 +242,7 @@ export function MatchDetailClient({
             <PixelToastContainer />
             <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
 
-            {/* Player Rating Sheet — bottom sheet / side panel */}
+            {/* Player Rating Card — centered modal */}
             <PlayerRatingSheet
                 isOpen={!!selectedPlayerId && match.status === 'finished'}
                 onClose={() => setSelectedPlayerId(null)}
@@ -257,6 +256,7 @@ export function MatchDetailClient({
                 averageRating={selectedPlayerId ? (ratings[selectedPlayerId]?.average ?? null) : null}
                 totalRatings={selectedPlayerId ? (ratings[selectedPlayerId]?.count ?? 0) : 0}
                 onNavigate={(id) => setSelectedPlayerId(id)}
+                isHome={match.is_home ?? true}
             />
 
             {/* Header */}
@@ -395,6 +395,7 @@ export function MatchDetailClient({
                                         ratings={ratings}
                                         userRatings={userScoresMap}
                                         viewMode={ratingViewMode}
+                                        isHome={match.is_home ?? true}
                                         onPlayerSelect={(id) => setSelectedPlayerId(id)}
                                     />
                                 </div>
