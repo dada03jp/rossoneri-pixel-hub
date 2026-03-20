@@ -79,28 +79,44 @@ export function MatchDetailClient({
     // Auth + existing ratings
     useEffect(() => {
         const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            setUser(user);
-            setLoading(false);
-            if (user) {
-                Promise.resolve(
-                    supabase.from('ratings').select('*')
-                        .eq('user_id', user.id).eq('match_id', match.id)
-                ).then(({ data }) => {
+
+        // ★ ユーザーのratingsを取得してauthLoadedを設定する共通関数
+        const fetchUserRatings = async (currentUser: User | null) => {
+            if (currentUser) {
+                try {
+                    const { data } = await supabase.from('ratings').select('*')
+                        .eq('user_id', currentUser.id).eq('match_id', match.id);
                     if (data) {
                         const existing: Record<string, { score: number; comment: string }> = {};
                         data.forEach((r: any) => {
                             existing[r.player_id] = { score: r.score, comment: r.comment || '' };
                         });
                         setUserRatings(existing);
+                    } else {
+                        setUserRatings({});
                     }
-                }).finally(() => setAuthLoaded(true));
+                } catch {
+                    setUserRatings({});
+                }
             } else {
-                setAuthLoaded(true);
+                setUserRatings({});
             }
+            setAuthLoaded(true);
+        };
+
+        // 初回: authチェック + ratings fetch
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user);
+            setLoading(false);
+            fetchUserRatings(user);
         });
+
+        // ★ ログイン/ログアウト時にも再fetch
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
+            const newUser = session?.user ?? null;
+            setUser(newUser);
+            setAuthLoaded(false); // 一旦非表示にして再fetchを待つ
+            fetchUserRatings(newUser);
         });
         return () => subscription.unsubscribe();
     }, [match.id]);
@@ -392,13 +408,12 @@ export function MatchDetailClient({
 
                         {/* ── 3. Formation Pitch (main) ── */}
                         <div className="relative z-0">
-                            {/* ★ FIX #1: CTA安定表示条件:
-                                - loading中は非表示 (hydration不安定→state不確定→一瞬出て消える原因)
-                                - 未ログイン: 常にCTA表示
-                                - ログイン済: userScoresMapが空(=未採点)の場合のみ表示
-                                - 採点後は自動的に消える (userScoresMapにキーが入る)
+                            {/* ★ CTA: authLoaded + userRatings が source of truth
+                                - authLoaded=false → 非表示
+                                - match未完了 → 非表示
+                                - ログイン済+採点済 → 非表示
+                                - それ以外 → CTA表示
                             */}
-                            {/* ★ CTA: authLoaded + userRatings が source of truth */}
                             {(() => {
                                 if (!authLoaded) return null;
                                 if (match.status !== 'finished') return null;
